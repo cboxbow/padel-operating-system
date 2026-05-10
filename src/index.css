@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    @apply bg-mpl-black text-white;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0A0A0A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A2A;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #D4AF37;
+  }
+}
+
+@layer components {
+  .mpl-card {
+    @apply bg-mpl-card border border-mpl-border rounded-2xl shadow-card;
+  }
+  
+  .mpl-card-gold {
+    @apply bg-mpl-card border border-mpl-gold/30 rounded-2xl shadow-gold;
+  }
+
+  .btn-gold {
+    @apply bg-gold-gradient text-mpl-black font-bold rounded-xl px-4 py-2.5 text-sm 
+           transition-all duration-200 hover:shadow-gold active:scale-95 
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply border border-mpl-border text-mpl-gray hover:text-white hover:border-mpl-gold/50 
+           rounded-xl px-4 py-2.5 text-sm transition-all duration-200 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-4 py-2.5 
+           text-sm transition-all duration-200 active:scale-95;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide;
+  }
+
+  .status-draft {
+    @apply status-badge bg-mpl-gray-dark/60 text-mpl-gray border border-mpl-gray-dark;
+  }
+  .status-ready {
+    @apply status-badge bg-mpl-gold/15 text-mpl-gold border border-mpl-gold/40;
+  }
+  .status-published {
+    @apply status-badge bg-green-500/15 text-green-400 border border-green-500/40;
+  }
+  .status-locked {
+    @apply status-badge bg-red-500/15 text-red-400 border border-red-500/40;
+  }
+  .status-pending {
+    @apply status-badge bg-orange-500/15 text-orange-400 border border-orange-500/40;
+  }
+  .status-validated {
+    @apply status-badge bg-blue-500/15 text-blue-400 border border-blue-500/40;
+  }
+
+  .input-field {
+    @apply bg-mpl-dark border border-mpl-border rounded-xl px-3 py-2.5 text-sm text-white 
+           placeholder-mpl-gray focus:outline-none focus:border-mpl-gold/60 focus:ring-1 
+           focus:ring-mpl-gold/30 transition-all duration-200 w-full;
+  }
+
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-mpl-gray mb-3;
+  }
+
+  .pool-slot {
+    @apply bg-mpl-dark border border-mpl-border rounded-xl p-3 flex items-center gap-3 
+           transition-all duration-200 cursor-pointer hover:border-mpl-gold/40 hover:bg-mpl-card2;
+  }
+
+  .pool-slot-locked {
+    @apply pool-slot border-mpl-gold/50 bg-mpl-gold/5 cursor-default;
+  }
+
+  .pool-slot-empty {
+    @apply bg-transparent border border-dashed border-mpl-border rounded-xl p-3 
+           flex items-center justify-center text-mpl-gray text-sm h-14;
+  }
+
+  .draw-bracket-line {
+    @apply border-l-2 border-t-2 border-mpl-border;
+  }
+
+  .tab-active {
+    @apply text-mpl-gold border-b-2 border-mpl-gold;
+  }
+  .tab-inactive {
+    @apply text-mpl-gray border-b-2 border-transparent hover:text-white;
+  }
+
+  .nav-item {
+    @apply flex flex-col items-center gap-0.5 py-2 px-3 text-xs transition-all duration-200;
+  }
+  .nav-item-active {
+    @apply nav-item text-mpl-gold;
+  }
+  .nav-item-inactive {
+    @apply nav-item text-mpl-gray hover:text-mpl-off-white;
+  }
+}
