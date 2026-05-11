@@ -51,7 +51,7 @@ export function TeamListPage() {
                   <p className="text-xs text-mpl-gray">{team.player1.fullName} · {team.player2.fullName}</p>
                   <p className="text-xs text-mpl-gray/70">{team.clubName}</p>
                 </div>
-                {team.ranking && <span className="text-xs text-mpl-gray flex-shrink-0">Rank #{team.ranking}</span>}
+                {team.ranking && <span className="text-xs text-mpl-gray flex-shrink-0">Team Weight {team.ranking}</span>}
               </div>
             ))}
           </div>
