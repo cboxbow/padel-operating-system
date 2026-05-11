@@ -118,10 +118,10 @@ export function DrawRoomPage() {
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
 export function PoolDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
-  const { pools, poolsError, registrations, redrawPool, publishPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
+  const { pools, poolsError, registrations, generatePools, redrawPool, publishPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
   const { addToast } = useToast();
 
-  const [selectedPool, setSelectedPool] = useState<string>(pools[0]?.id ?? '');
+  const [selectedPool, setSelectedPool] = useState<string>('');
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   // showOverrideDialog reserved for future override flow
   const [slotToSwap, setSlotToSwap] = useState<PoolSlot | null>(null);
@@ -132,7 +132,7 @@ export function PoolDrawPage() {
   const pool = tournamentPools.find(p => p.id === selectedPool);
 
   useEffect(() => {
-    if (!selectedPool && tournamentPools[0]) {
+    if (tournamentPools.length > 0 && !tournamentPools.some(p => p.id === selectedPool)) {
       setSelectedPool(tournamentPools[0].id);
     }
   }, [selectedPool, tournamentPools]);
@@ -140,6 +140,12 @@ export function PoolDrawPage() {
   const validatedTeams = registrations
     .filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
     .map(r => r.team);
+  const qualifTeams = registrations
+    .filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated' && r.notes?.toUpperCase().includes('DRAW ENTRY: QUALIF'))
+    .map(r => r.team);
+  const poolTeams = selectedTournament?.competitionMode === 'qualification_phase' && qualifTeams.length >= 2
+    ? qualifTeams
+    : validatedTeams;
 
   // assignedTeamIds reserved for future use
 
@@ -149,6 +155,21 @@ export function PoolDrawPage() {
     const nonLockedTeams = validatedTeams.filter(t => !pool.slots.find(s => s.isLocked && s.team?.id === t.id));
     redrawPool(pool.id, nonLockedTeams);
     addToast({ type: 'info', title: `${pool.name} Redrawn`, message: 'Pool redrawn. Locked slots preserved.' });
+  };
+
+  const handleGeneratePools = async () => {
+    if (!selectedTournament) return;
+    try {
+      await generatePools(selectedTournament.id, poolTeams);
+      await setTournamentStatus(selectedTournament.id, 'pool_draw_ready');
+      addToast({ type: 'success', title: 'Pools Generated', message: `${poolTeams.length} teams placed into pools.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Pool Generation Failed',
+        message: error instanceof Error ? error.message : 'Unable to generate pools.',
+      });
+    }
   };
 
   const handlePublish = async () => {
@@ -171,7 +192,6 @@ export function PoolDrawPage() {
   };
 
   const handleSlotSwap = (slot: PoolSlot) => {
-    if (slot.isLocked) return;
     setSlotToSwap(slot);
     setShowSwapPicker(true);
   };
@@ -226,6 +246,28 @@ export function PoolDrawPage() {
             ))}
           </div>
 
+          {tournamentPools.length === 0 && (
+            <div className="px-4 mt-4">
+              <div className="mpl-card p-4 space-y-3">
+                <div>
+                  <p className="font-semibold text-white text-sm">No pools generated yet</p>
+                  <p className="text-xs text-mpl-gray mt-1">
+                    {poolTeams.length >= 2
+                      ? `${poolTeams.length} validated teams are ready for a qualification pool draw.`
+                      : 'Validate at least 2 teams before generating pools.'}
+                  </p>
+                </div>
+                <button
+                  className="w-full btn-gold flex items-center justify-center gap-2"
+                  onClick={() => void handleGeneratePools()}
+                  disabled={poolTeams.length < 2}
+                >
+                  <Shuffle size={14} /> Generate Qualification Pools
+                </button>
+              </div>
+            </div>
+          )}
+
           {pool && (
             <div className="px-4 mt-4 space-y-4">
               {/* Pool status */}
@@ -279,11 +321,7 @@ export function PoolDrawPage() {
                             <>
                               <button
                                 onClick={() => handleSlotSwap(slot)}
-                                disabled={slot.isLocked}
-                                className={cn(
-                                  'p-1.5 rounded-lg text-xs transition-colors',
-                                  slot.isLocked ? 'text-mpl-gray/30 cursor-not-allowed' : 'text-mpl-gray hover:text-mpl-gold hover:bg-mpl-gold/10'
-                                )}
+                                className="p-1.5 rounded-lg text-xs text-mpl-gray transition-colors hover:text-mpl-gold hover:bg-mpl-gold/10"
                                 title="Change team in slot"
                               >
                                 <Edit3 size={13} />
@@ -356,7 +394,7 @@ export function PoolDrawPage() {
               >
                 Clear Slot (Empty)
               </button>
-              {validatedTeams.map(team => (
+              {poolTeams.map(team => (
                 <button
                   key={team.id}
                   onClick={() => handleSwapWithTeam(team)}

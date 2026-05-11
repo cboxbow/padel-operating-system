@@ -1,27 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Shuffle, Lock, Unlock, Globe, Edit3
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
-import { MOCK_DRAW_SLOTS, MOCK_STANDINGS } from '../mockData';
 import { cn } from '../lib';
 import type { DrawSlot, Team } from '../types';
 
 export function MainDrawPage() {
-  const { navigate, selectedTournament } = useAppState();
+  const { navigate, selectedTournament, setTournamentStatus } = useAppState();
   const { addToast } = useToast();
-  const { addAuditLog } = useTournamentData();
+  const { addAuditLog, registrations } = useTournamentData();
 
-  const [slots, setSlots] = useState<DrawSlot[]>(MOCK_DRAW_SLOTS);
+  const validatedTeams = useMemo(() => (
+    registrations
+      .filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
+      .map(r => r.team)
+      .sort((a, b) => {
+        const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
+        if (seedDiff !== 0) return seedDiff;
+        return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+      })
+  ), [registrations, selectedTournament?.id]);
+
+  const [slots, setSlots] = useState<DrawSlot[]>([]);
   const [drawStatus, setDrawStatus] = useState<'draft' | 'published' | 'locked'>('draft');
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [swapTarget, setSwapTarget] = useState<DrawSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
 
-  const qualifiedTeams = MOCK_STANDINGS.filter(s => s.qualified).map(s => s.team);
+  const qualifiedTeams = validatedTeams;
+  const teamSignature = validatedTeams.map(team => `${team.id}:${team.seed ?? ''}:${team.ranking ?? ''}`).join('|');
+
+  useEffect(() => {
+    setSlots(buildMainDrawSlots(validatedTeams));
+    setDrawStatus('draft');
+  }, [selectedTournament?.id, teamSignature, validatedTeams]);
 
   const totalSlots = slots.length;
   const filledSlots = slots.filter(s => s.team || s.isBye).length;
@@ -30,7 +46,10 @@ export function MainDrawPage() {
 
   const handleRandomDraw = () => {
     // unlockedSlots reserved for future batched draw logic
-    const shuffled = [...qualifiedTeams].sort(() => Math.random() - 0.5);
+    const lockedTeamIds = new Set(slots.filter(slot => slot.isLocked && slot.team).map(slot => slot.team!.id));
+    const shuffled = [...qualifiedTeams]
+      .filter(team => !lockedTeamIds.has(team.id))
+      .sort(() => Math.random() - 0.5);
     let teamIdx = 0;
     const newSlots = slots.map(s => {
       if (s.isLocked) return s;
@@ -64,7 +83,6 @@ export function MainDrawPage() {
   };
 
   const handleSlotSwap = (slot: DrawSlot) => {
-    if (slot.isLocked) return;
     setSwapTarget(slot);
     setShowSwapPicker(true);
   };
@@ -90,6 +108,9 @@ export function MainDrawPage() {
 
   const handlePublish = () => {
     setDrawStatus('published');
+    if (selectedTournament) {
+      void setTournamentStatus(selectedTournament.id, 'main_draw_published');
+    }
     addAuditLog({
       action: 'MAIN_DRAW_PUBLISHED', module: 'Main Draw',
       entityType: 'draw', entityId: 'draw1',
@@ -101,6 +122,9 @@ export function MainDrawPage() {
 
   const handleLock = () => {
     setDrawStatus('locked');
+    if (selectedTournament) {
+      void setTournamentStatus(selectedTournament.id, 'locked');
+    }
     addAuditLog({
       action: 'MAIN_DRAW_LOCKED', module: 'Main Draw',
       entityType: 'draw', entityId: 'draw1',
@@ -150,6 +174,12 @@ export function MainDrawPage() {
               </div>
             ))}
           </div>
+
+          {validatedTeams.length === 0 && (
+            <div className="mx-4 mt-4 rounded-xl border border-mpl-gold/30 bg-mpl-gold/10 px-3 py-3 text-xs text-mpl-gold">
+              No validated teams found for this tournament. Validate or import teams first.
+            </div>
+          )}
 
           {/* Actions */}
           {drawStatus === 'draft' && (
@@ -281,6 +311,31 @@ export function MainDrawPage() {
   );
 }
 
+function buildMainDrawSlots(teams: Team[]): DrawSlot[] {
+  if (teams.length === 0) return [];
+
+  const bracketSize = nextPowerOfTwo(Math.max(2, teams.length));
+  return Array.from({ length: bracketSize }, (_, index) => {
+    const team = teams[index];
+    const isBye = !team;
+    return {
+      id: `main-slot-${index + 1}`,
+      drawId: 'main-draw-local',
+      round: 1,
+      position: index + 1,
+      team,
+      isBye,
+      isLocked: Boolean(team?.seed),
+    };
+  });
+}
+
+function nextPowerOfTwo(value: number): number {
+  let size = 1;
+  while (size < value) size *= 2;
+  return size;
+}
+
 function DrawSlotRow({
   slot, isLocked: drawLocked, onSwap, onToggleLock, _onToggleBye: _ob, isDraft
 }: {
@@ -314,7 +369,7 @@ function DrawSlotRow({
       )}
       {isDraft && !drawLocked && (
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={onSwap} disabled={slot.isLocked} className={cn('p-1 rounded transition-colors', slot.isLocked ? 'text-mpl-gray/20 cursor-not-allowed' : 'text-mpl-gray hover:text-mpl-gold')}>
+          <button onClick={onSwap} className="p-1 rounded text-mpl-gray transition-colors hover:text-mpl-gold">
             <Edit3 size={11} />
           </button>
           <button onClick={onToggleLock} className={cn('p-1 rounded transition-colors', slot.isLocked ? 'text-mpl-gold' : 'text-mpl-gray hover:text-mpl-gold')}>
