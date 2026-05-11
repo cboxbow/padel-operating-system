@@ -130,6 +130,9 @@ export interface CreateTeamRegistrationInput {
   player2Ranking?: number;
   status: RegistrationStatus;
   notes?: string;
+  seed?: number;
+  teamRanking?: number;
+  isSeedLocked?: boolean;
 }
 
 export async function createTeamRegistration(input: CreateTeamRegistrationInput): Promise<Registration> {
@@ -260,6 +263,9 @@ async function createTeam(
       player1_id: player1Id,
       player2_id: player2Id,
       club_id: clubId,
+      seed: input.seed ?? null,
+      is_seed_locked: input.isSeedLocked ?? input.seed !== undefined,
+      ranking: input.teamRanking ?? null,
     })
     .select('id')
     .single();

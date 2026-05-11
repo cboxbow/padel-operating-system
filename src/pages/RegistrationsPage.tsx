@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CheckCircle, Plus, XCircle, Search, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { CheckCircle, FileSpreadsheet, Plus, XCircle, Search, ChevronDown, ChevronUp, User } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, Modal, EmptyState } from '../components/UI';
@@ -7,6 +7,19 @@ import { registrationStatusClass, getRegistrationStatusLabel, formatDate, format
 import type { Registration, RegistrationStatus } from '../types';
 
 type RegFilter = 'all' | RegistrationStatus;
+
+interface ImportedTeamRow {
+  rowNumber: number;
+  teamName: string;
+  player1Name: string;
+  player1Ranking?: number;
+  player2Name: string;
+  player2Ranking?: number;
+  seed?: number;
+  drawEntry?: string;
+  teamWeight?: number;
+  seedingBand?: string;
+}
 
 export function RegistrationsPage() {
   const { selectedTournament, navigate } = useAppState();
@@ -19,7 +32,19 @@ export function RegistrationsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importRows, setImportRows] = useState<ImportedTeamRow[]>([]);
+  const [importFileName, setImportFileName] = useState('');
+  const [importDefaults, setImportDefaults] = useState({
+    clubName: 'Padel Mauritius Club',
+    clubShortCode: 'PMC',
+    clubLocation: 'Mauritius',
+    nationality: 'MU',
+    status: 'validated' as RegistrationStatus,
+  });
   const [teamForm, setTeamForm] = useState({
     teamName: '',
     clubName: '',
@@ -147,6 +172,84 @@ export function RegistrationsPage() {
     }
   };
 
+  const handleImportFile = async (file: File) => {
+    setImportFileName(file.name);
+    try {
+      const rows = await parseTeamImportFile(file);
+      setImportRows(rows);
+      setShowImport(true);
+      if (rows.length === 0) {
+        addToast({ type: 'warning', title: 'No Teams Found', message: 'Check columns: Player 1, Rank, Player 2, Rank.' });
+      } else {
+        addToast({ type: 'success', title: 'File Parsed', message: `${rows.length} teams detected.` });
+      }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Import Failed',
+        message: error instanceof Error ? error.message : 'Unable to read this file.',
+      });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImportTeams = async () => {
+    if (!selectedTournament) {
+      addToast({ type: 'warning', title: 'Select Tournament', message: 'Open a tournament before importing teams.' });
+      return;
+    }
+
+    if (importRows.length === 0) {
+      addToast({ type: 'warning', title: 'No Rows', message: 'Choose an Excel or CSV file first.' });
+      return;
+    }
+
+    setIsImporting(true);
+    let created = 0;
+
+    try {
+      for (const row of importRows) {
+        await addTeamRegistration({
+          tournamentId: selectedTournament.id,
+          teamName: row.teamName,
+          clubName: importDefaults.clubName,
+          clubShortCode: importDefaults.clubShortCode,
+          clubLocation: importDefaults.clubLocation,
+          player1Name: row.player1Name,
+          player1Nationality: importDefaults.nationality,
+          player1Ranking: row.player1Ranking,
+          player2Name: row.player2Name,
+          player2Nationality: importDefaults.nationality,
+          player2Ranking: row.player2Ranking,
+          status: importDefaults.status,
+          seed: row.seed,
+          teamRanking: row.teamWeight,
+          isSeedLocked: row.seed !== undefined,
+          notes: [
+            row.drawEntry ? `Draw entry: ${row.drawEntry}` : null,
+            row.seedingBand ? `Seeding band: ${row.seedingBand}` : null,
+            `Imported from ${importFileName}`,
+          ].filter(Boolean).join(' | '),
+        });
+        created += 1;
+      }
+
+      addToast({ type: 'success', title: 'Import Complete', message: `${created} teams imported.` });
+      setShowImport(false);
+      setImportRows([]);
+      setImportFileName('');
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Import Stopped',
+        message: `Imported ${created}/${importRows.length}. ${error instanceof Error ? error.message : 'Unable to continue.'}`,
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <TopBar
@@ -155,9 +258,24 @@ export function RegistrationsPage() {
         leftAction={selectedTournament ? <BackButton onClick={() => navigate('tournament_detail', selectedTournament.id)} /> : undefined}
         rightAction={
           selectedTournament ? (
-            <button onClick={() => setShowCreateTeam(true)} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1.5">
-              <Plus size={13} /> Add Team
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  if (file) void handleImportFile(file);
+                }}
+              />
+              <button onClick={() => fileInputRef.current?.click()} className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5">
+                <FileSpreadsheet size={13} /> Import
+              </button>
+              <button onClick={() => setShowCreateTeam(true)} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1.5">
+                <Plus size={13} /> Add Team
+              </button>
+            </div>
           ) : undefined
         }
       />
@@ -405,8 +523,181 @@ export function RegistrationsPage() {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        title="Import Excel / CSV"
+        size="lg"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setShowImport(false)}>Cancel</button>
+            <button className="btn-gold" onClick={() => void handleImportTeams()} disabled={isImporting || importRows.length === 0}>
+              {isImporting ? 'Importing...' : `Import ${importRows.length} Teams`}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-mpl-gold/30 bg-mpl-gold/10 px-3 py-2 text-xs text-mpl-gold">
+            {importFileName || 'Excel / CSV'} - columns detected: Player 1, Rank, Player 2, Rank, Seeding.
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Club</label>
+              <input
+                className="input-field"
+                value={importDefaults.clubName}
+                onChange={e => setImportDefaults(prev => ({ ...prev, clubName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="section-title">Code</label>
+              <input
+                className="input-field uppercase"
+                value={importDefaults.clubShortCode}
+                onChange={e => setImportDefaults(prev => ({ ...prev, clubShortCode: e.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div>
+              <label className="section-title">Nationality</label>
+              <input
+                className="input-field uppercase"
+                value={importDefaults.nationality}
+                onChange={e => setImportDefaults(prev => ({ ...prev, nationality: e.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div>
+              <label className="section-title">Status</label>
+              <select
+                className="input-field"
+                value={importDefaults.status}
+                onChange={e => setImportDefaults(prev => ({ ...prev, status: e.target.value as RegistrationStatus }))}
+              >
+                <option value="pending">Pending</option>
+                <option value="validated">Validated</option>
+                <option value="waitlisted">Waitlisted</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-mpl-border">
+            {importRows.length === 0 ? (
+              <div className="p-4 text-sm text-mpl-gray">No valid team rows detected.</div>
+            ) : (
+              importRows.slice(0, 40).map(row => (
+                <div key={`${row.rowNumber}-${row.teamName}`} className="flex items-center gap-3 border-b border-mpl-border/60 px-3 py-2 last:border-0">
+                  <div className="w-9 text-xs font-bold text-mpl-gold">{row.seed ? `#${row.seed}` : row.drawEntry || '-'}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{row.teamName}</p>
+                    <p className="truncate text-xs text-mpl-gray">
+                      {row.player1Name} ({row.player1Ranking ?? '-'}) / {row.player2Name} ({row.player2Ranking ?? '-'})
+                    </p>
+                  </div>
+                  {row.seedingBand && <span className="text-xs text-mpl-gray">{row.seedingBand}</span>}
+                </div>
+              ))
+            )}
+          </div>
+
+          {importRows.length > 40 && (
+            <p className="text-xs text-mpl-gray">Showing first 40 rows. All {importRows.length} teams will be imported.</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
+}
+
+async function parseTeamImportFile(file: File): Promise<ImportedTeamRow[]> {
+  const XLSX = await import('xlsx');
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const table = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+  const headerIndex = table.findIndex(row => row.some(cell => normalizeHeader(cell) === 'player1') && row.some(cell => normalizeHeader(cell) === 'player2'));
+
+  if (headerIndex < 0) {
+    throw new Error('Header row not found. Required columns: Player 1, Rank, Player 2, Rank.');
+  }
+
+  const header = table[headerIndex];
+  const player1Index = findHeaderIndex(header, 'player1');
+  const player2Index = findHeaderIndex(header, 'player2');
+  const rankIndexes = header
+    .map((cell, index) => ({ key: normalizeHeader(cell), index }))
+    .filter(item => item.key === 'rank')
+    .map(item => item.index);
+
+  if (player1Index < 0 || player2Index < 0 || rankIndexes.length < 2) {
+    throw new Error('Missing columns. Required: Player 1, Rank, Player 2, Rank.');
+  }
+
+  const firstRankIndex = rankIndexes.find(index => index > player1Index && index < player2Index) ?? rankIndexes[0];
+  const secondRankIndex = rankIndexes.find(index => index > player2Index) ?? rankIndexes[1];
+  const teamWeightIndex = findHeaderIndex(header, 'teamweight');
+  const seedingBandIndex = findLastHeaderIndex(header, 'seeding');
+  const drawEntryIndex = 1;
+  const seedLabelIndex = 0;
+
+  return table.slice(headerIndex + 1)
+    .map((row, offset): ImportedTeamRow | null => {
+      const player1Name = readCell(row, player1Index);
+      const player2Name = readCell(row, player2Index);
+      if (!player1Name || !player2Name) return null;
+
+      const seedLabel = readCell(row, seedLabelIndex);
+      const seed = parseSeed(seedLabel);
+      const drawEntry = readCell(row, drawEntryIndex);
+      const teamWeight = parseNumber(readCell(row, teamWeightIndex));
+      const player1Ranking = parseNumber(readCell(row, firstRankIndex));
+      const player2Ranking = parseNumber(readCell(row, secondRankIndex));
+
+      return {
+        rowNumber: headerIndex + offset + 2,
+        teamName: `${player1Name} / ${player2Name}`,
+        player1Name,
+        player1Ranking,
+        player2Name,
+        player2Ranking,
+        seed,
+        drawEntry,
+        teamWeight,
+        seedingBand: readCell(row, seedingBandIndex),
+      };
+    })
+    .filter((row): row is ImportedTeamRow => Boolean(row));
+}
+
+function normalizeHeader(value: unknown): string {
+  return String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function findHeaderIndex(header: string[], key: string): number {
+  return header.findIndex(cell => normalizeHeader(cell) === key);
+}
+
+function findLastHeaderIndex(header: string[], key: string): number {
+  for (let index = header.length - 1; index >= 0; index -= 1) {
+    if (normalizeHeader(header[index]) === key) return index;
+  }
+  return -1;
+}
+
+function readCell(row: string[], index: number): string {
+  if (index < 0) return '';
+  return String(row[index] ?? '').trim();
+}
+
+function parseNumber(value: string): number | undefined {
+  const parsed = Number(String(value).replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseSeed(value: string): number | undefined {
+  const match = value.match(/\d+/);
+  return match ? parseInt(match[0], 10) : undefined;
 }
 
 function PlayerFields({
