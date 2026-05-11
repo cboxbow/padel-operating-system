@@ -1,15 +1,29 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
-import { useAppState } from '../context';
+import { Plus, Search } from 'lucide-react';
+import { useAppState, useToast } from '../context';
 import { TournamentCard, TopBar } from '../components/Navigation';
-import { Spinner } from '../components/UI';
+import { Modal, Spinner } from '../components/UI';
+import type { Tournament } from '../types';
 
 type FilterTab = 'all' | 'active' | 'draft' | 'completed';
 
 export function TournamentsPage() {
-  const { navigate, tournaments, isLoadingTournaments, tournamentsError } = useAppState();
+  const { navigate, tournaments, isLoadingTournaments, tournamentsError, addTournament } = useAppState();
+  const { addToast } = useToast();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    venue: '',
+    startDate: '',
+    endDate: '',
+    maxTeams: '16',
+    eventType: 'doubles' as Tournament['eventType'],
+    category: 'open' as Tournament['category'],
+    status: 'draft' as Tournament['status'],
+  });
 
   const filtered = tournaments.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
@@ -27,9 +41,54 @@ export function TournamentsPage() {
     { id: 'completed', label: 'Completed', count: tournaments.filter(t => ['locked', 'completed'].includes(t.status)).length },
   ];
 
+  const handleCreate = async () => {
+    if (!form.name.trim() || !form.venue.trim() || !form.startDate || !form.endDate) return;
+    setIsSubmitting(true);
+    try {
+      await addTournament({
+        name: form.name.trim(),
+        venue: form.venue.trim(),
+        startDate: form.startDate,
+        endDate: form.endDate,
+        maxTeams: parseInt(form.maxTeams, 10) || 16,
+        eventType: form.eventType,
+        category: form.category,
+        status: form.status,
+      });
+      addToast({ type: 'success', title: 'Tournament Created', message: form.name.trim() });
+      setShowCreate(false);
+      setForm({
+        name: '',
+        venue: '',
+        startDate: '',
+        endDate: '',
+        maxTeams: '16',
+        eventType: 'doubles',
+        category: 'open',
+        status: 'draft',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Create Failed',
+        message: error instanceof Error ? error.message : 'Unable to create tournament.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <TopBar title="Tournaments" subtitle={`${tournaments.length} total`} />
+      <TopBar
+        title="Tournaments"
+        subtitle={`${tournaments.length} total`}
+        rightAction={
+          <button onClick={() => setShowCreate(true)} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1.5">
+            <Plus size={13} /> New
+          </button>
+        }
+      />
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-3 pb-24">
           {tournamentsError && (
@@ -82,6 +141,75 @@ export function TournamentsPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Create Tournament"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+            <button className="btn-gold" onClick={() => void handleCreate()} disabled={isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="section-title">Name</label>
+            <input className="input-field" value={form.name} onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className="section-title">Venue</label>
+            <input className="input-field" value={form.venue} onChange={e => setForm(prev => ({ ...prev, venue: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Start</label>
+              <input type="date" className="input-field" value={form.startDate} onChange={e => setForm(prev => ({ ...prev, startDate: e.target.value }))} />
+            </div>
+            <div>
+              <label className="section-title">End</label>
+              <input type="date" className="input-field" value={form.endDate} onChange={e => setForm(prev => ({ ...prev, endDate: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Event</label>
+              <select className="input-field" value={form.eventType} onChange={e => setForm(prev => ({ ...prev, eventType: e.target.value as Tournament['eventType'] }))}>
+                <option value="singles">Singles</option>
+                <option value="doubles">Doubles</option>
+                <option value="mixed_doubles">Mixed Doubles</option>
+              </select>
+            </div>
+            <div>
+              <label className="section-title">Category</label>
+              <select className="input-field" value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value as Tournament['category'] }))}>
+                <option value="open">Open</option>
+                <option value="pro">Pro</option>
+                <option value="amateur">Amateur</option>
+                <option value="junior">Junior</option>
+                <option value="senior">Senior</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Max Teams</label>
+              <input type="number" min={2} className="input-field" value={form.maxTeams} onChange={e => setForm(prev => ({ ...prev, maxTeams: e.target.value }))} />
+            </div>
+            <div>
+              <label className="section-title">Status</label>
+              <select className="input-field" value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value as Tournament['status'] }))}>
+                <option value="draft">Draft</option>
+                <option value="registration_open">Registration Open</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

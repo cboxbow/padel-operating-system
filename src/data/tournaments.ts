@@ -45,3 +45,56 @@ export async function fetchTournaments(): Promise<Tournament[]> {
 
   return (data ?? []).map(row => toTournament(row as TournamentRow));
 }
+
+export type CreateTournamentInput = {
+  name: string;
+  eventType: Tournament['eventType'];
+  category: Tournament['category'];
+  status: Tournament['status'];
+  startDate: string;
+  endDate: string;
+  venue: string;
+  maxTeams: number;
+};
+
+export async function createTournament(input: CreateTournamentInput): Promise<Tournament> {
+  const { data: tournament, error } = await supabase
+    .from('tournaments')
+    .insert({
+      name: input.name,
+      event_type: input.eventType,
+      category: input.category,
+      status: input.status,
+      start_date: input.startDate,
+      end_date: input.endDate,
+      venue: input.venue,
+      max_teams: input.maxTeams,
+    })
+    .select('id,name,event_type,category,status,start_date,end_date,venue,max_teams,created_at,updated_at')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const row = tournament as TournamentRow;
+
+  const { error: eventError } = await supabase
+    .from('tournament_events')
+    .insert({
+      tournament_id: row.id,
+      name: row.name,
+      event_type: row.event_type,
+      category: row.category,
+      max_teams: row.max_teams,
+      status: row.status,
+      starts_at: `${row.start_date}T00:00:00+04:00`,
+      ends_at: `${row.end_date}T23:59:00+04:00`,
+    });
+
+  if (eventError) {
+    throw eventError;
+  }
+
+  return toTournament(row);
+}

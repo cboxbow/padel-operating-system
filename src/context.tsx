@@ -41,7 +41,7 @@ export function useToast() {
 
 // ─── App State Context ────────────────────────────────────────────────────────
 import type { AppView, Tournament, Pool, Team } from './types';
-import { fetchTournaments } from './data/tournaments';
+import { createTournament, fetchTournaments, type CreateTournamentInput } from './data/tournaments';
 import { fetchRegistrations, updateRegistrationStatus } from './data/registrations';
 import { updateTeamSeed } from './data/teams';
 import { fetchPools, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
@@ -62,6 +62,7 @@ interface AppStateContextValue extends AppState {
   navigate: (view: AppView, tournamentId?: string, poolId?: string) => void;
   setSelectedPool: (poolId: string | null) => void;
   refreshTournaments: () => Promise<void>;
+  addTournament: (input: CreateTournamentInput) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue>({
@@ -75,6 +76,7 @@ const AppStateContext = createContext<AppStateContextValue>({
   navigate: () => undefined,
   setSelectedPool: () => undefined,
   refreshTournaments: async () => undefined,
+  addTournament: async () => undefined,
 });
 
 import { MOCK_TOURNAMENTS } from './mockData';
@@ -140,8 +142,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, selectedPoolId: poolId }));
   }, []);
 
+  const addTournament = useCallback(async (input: CreateTournamentInput) => {
+    const tournament = await createTournament(input);
+    setState(prev => ({
+      ...prev,
+      tournaments: [tournament, ...prev.tournaments],
+      tournamentsError: null,
+    }));
+  }, []);
+
   return (
-    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments }}>
+    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments, addTournament }}>
       {children}
     </AppStateContext.Provider>
   );
