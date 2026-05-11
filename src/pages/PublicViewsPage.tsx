@@ -1,29 +1,27 @@
-import { useState } from 'react';
 import {
   Trophy, Users, ChevronRight, Globe, Lock
 } from 'lucide-react';
-import { useAppState } from '../context';
+import { useAppState, useTournamentData } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, GoldDivider } from '../components/UI';
-
-import { MOCK_POOLS, MOCK_STANDINGS, MOCK_DRAW_SLOTS } from '../mockData';
 import { cn } from '../lib';
+import type { MatchSet, Pool, Team } from '../types';
 
 export function PublicPoolsPage() {
   const { navigate, selectedTournament } = useAppState();
-  const [activePool, setActivePool] = useState<string>('pool_a');
+  const { pools, matches } = useTournamentData();
 
-  const pools = MOCK_POOLS.filter(p => p.tournamentId === selectedTournament?.id);
-  const pool = pools.find(p => p.id === activePool);
-  const poolStandings = MOCK_STANDINGS.filter(s => s.poolId === activePool)
-    .sort((a, b) => a.position - b.position);
+  const tournamentPools = pools
+    .filter(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status))
+    .sort((a, b) => a.letter.localeCompare(b.letter));
+  const poolMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
 
   return (
     <div className="flex flex-col h-full">
       <TopBar
         title="Pool Draw"
-        subtitle="Published — Official View"
-        leftAction={<BackButton onClick={() => navigate('public_bracket')} label="Back" />}
+        subtitle={selectedTournament?.name ?? 'Official View'}
+        leftAction={<BackButton onClick={() => navigate('public_bracket', selectedTournament?.id)} label="Back" />}
         rightAction={
           <div className="flex items-center gap-1.5">
             <Globe size={12} className="text-green-400" />
@@ -32,104 +30,26 @@ export function PublicPoolsPage() {
         }
       />
       <div className="flex-1 overflow-y-auto">
-        <div className="pb-24">
-          {/* MPL Header banner */}
-          <div className="mx-4 mt-4 p-4 rounded-2xl bg-gradient-to-r from-mpl-card to-mpl-dark border border-mpl-gold/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center flex-shrink-0">
-                <span className="text-mpl-black font-black text-xs">MPL</span>
-              </div>
-              <div>
-                <p className="font-black text-white text-sm">{selectedTournament?.name ?? 'MPL Open 2026'}</p>
-                <p className="text-xs text-mpl-gold">{selectedTournament?.venue ?? 'Official Pool Draw'}</p>
-              </div>
+        <div className="pb-24 px-4 pt-4 space-y-4">
+          <PublicHeader title={selectedTournament?.name ?? 'MPL'} subtitle={selectedTournament?.venue ?? 'Official Pool Draw'} />
+
+          {tournamentPools.length === 0 ? (
+            <div className="mpl-card p-4 text-center">
+              <p className="text-sm font-semibold text-white">No published pools yet</p>
+              <p className="text-xs text-mpl-gray mt-1">Pool draw will appear here once it is officially published.</p>
             </div>
-          </div>
-
-          {/* Pool tabs */}
-          <div className="flex gap-2 px-4 mt-4">
-            {pools.map(p => (
-              <button key={p.id} onClick={() => setActivePool(p.id)}
-                className={cn('flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all',
-                  activePool === p.id ? 'bg-mpl-gold text-mpl-black border-mpl-gold' : 'border-mpl-border text-mpl-gray hover:border-mpl-gold/30'
-                )}>
-                {p.name}
-                {p.status === 'published' && <span className="ml-1 text-[10px] opacity-70">✓</span>}
-              </button>
-            ))}
-          </div>
-
-          {pool && (
-            <div className="px-4 mt-4 space-y-4">
-              {/* Pool teams grid */}
-              <div>
-                <p className="section-title">Teams in {pool.name}</p>
-                <div className="space-y-2">
-                  {pool.slots.map(slot => (
-                    <div key={slot.id} className={cn(
-                      'flex items-center gap-3 p-3 rounded-xl border',
-                      slot.isEmpty ? 'border-dashed border-mpl-border' : 'border-mpl-border bg-mpl-dark'
-                    )}>
-                      <div className="w-7 h-7 rounded-lg bg-mpl-border flex items-center justify-center text-xs font-bold text-mpl-gray flex-shrink-0">
-                        {slot.position}
-                      </div>
-                      {slot.isEmpty ? (
-                        <span className="text-sm text-mpl-gray italic">TBD</span>
-                      ) : (
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {slot.team?.seed && (
-                              <span className="text-[9px] bg-gold-gradient text-mpl-black font-black px-1.5 py-0.5 rounded flex-shrink-0">
-                                #{slot.team.seed}
-                              </span>
-                            )}
-                            <p className="text-sm font-semibold text-white truncate">{slot.team?.name}</p>
-                          </div>
-                          <p className="text-xs text-mpl-gray">{slot.team?.clubName}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          ) : (
+            tournamentPools.map(pool => (
+              <div key={pool.id} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="section-title mb-0">{pool.name}</p>
+                  <span className="status-badge status-published">{pool.status}</span>
                 </div>
+                <PoolTeams pool={pool} />
+                <PoolStandings pool={pool} matches={poolMatches.filter(match => match.poolId === pool.id)} />
+                <GoldDivider />
               </div>
-
-              <GoldDivider />
-
-              {/* Standings */}
-              {poolStandings.length > 0 && (
-                <div>
-                  <p className="section-title">Standings</p>
-                  <div className="mpl-card overflow-hidden">
-                    <div className="flex items-center gap-1 px-4 py-2 text-[9px] text-mpl-gray font-bold uppercase tracking-widest bg-mpl-dark border-b border-mpl-border">
-                      <span className="w-6">#</span>
-                      <span className="flex-1">Team</span>
-                      <span className="w-7 text-center">W</span>
-                      <span className="w-7 text-center">L</span>
-                      <span className="w-8 text-center">Pts</span>
-                    </div>
-                    {poolStandings.map(s => (
-                      <div key={s.teamId} className={cn(
-                        'flex items-center gap-1 px-4 py-2.5 border-b border-mpl-border/40 last:border-0',
-                        s.qualified ? 'bg-green-500/5' : ''
-                      )}>
-                        <div className={cn(
-                          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0',
-                          s.position === 1 ? 'bg-gold-gradient text-mpl-black' :
-                          s.position === 2 ? 'bg-mpl-border text-mpl-off-white' : 'text-mpl-gray'
-                        )}>{s.position}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{s.team.name}</p>
-                          {s.qualified && <span className="text-[9px] text-green-400 font-bold">✓ Qualified</span>}
-                        </div>
-                        <span className="w-7 text-center text-sm font-bold text-green-400">{s.wins}</span>
-                        <span className="w-7 text-center text-sm font-bold text-red-400">{s.losses}</span>
-                        <span className="w-8 text-center text-sm font-black text-mpl-gold">{s.points}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            ))
           )}
         </div>
       </div>
@@ -137,87 +57,270 @@ export function PublicPoolsPage() {
   );
 }
 
-// ─── Public Bracket Page ──────────────────────────────────────────────────────
 export function PublicBracketPage() {
   const { navigate, selectedTournament } = useAppState();
+  const { registrations, matches, pools } = useTournamentData();
 
-  const slots = MOCK_DRAW_SLOTS;
-  const matchPairs: { slotA: typeof slots[0]; slotB?: typeof slots[0] }[] = [];
+  const teams = registrations
+    .filter(reg => reg.tournamentId === selectedTournament?.id && reg.status === 'validated')
+    .map(reg => reg.team)
+    .sort(compareTeamsForDraw);
+  const slots = buildPublicMainDrawSlots(teams);
+  const matchPairs: { slotA: PublicSlot; slotB?: PublicSlot }[] = [];
   for (let i = 0; i < slots.length; i += 2) {
     matchPairs.push({ slotA: slots[i], slotB: slots[i + 1] });
   }
+  const publishedPools = pools.some(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status));
+  const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id);
 
   return (
     <div className="flex flex-col h-full">
       <TopBar
-        title="Main Draw"
-        subtitle="Official Bracket"
+        title="Public View"
+        subtitle={selectedTournament?.name ?? 'Official Bracket'}
         leftAction={<BackButton onClick={() => navigate('tournament_detail', selectedTournament?.id)} />}
         rightAction={
           <div className="flex items-center gap-1.5">
-            <Lock size={11} className="text-red-400" />
-            <span className="text-xs text-red-400 font-semibold">Official</span>
+            <Globe size={11} className="text-green-400" />
+            <span className="text-xs text-green-400 font-semibold">Live</span>
           </div>
         }
       />
       <div className="flex-1 overflow-y-auto">
         <div className="pb-24 px-4 pt-4">
-          {/* Tournament banner */}
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-mpl-card to-mpl-dark border border-mpl-gold/30 mb-4 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-gold-gradient flex items-center justify-center mx-auto mb-2">
-              <Trophy size={20} className="text-mpl-black" />
+          <PublicHeader title={selectedTournament?.name ?? 'MPL'} subtitle={`${selectedTournament?.venue ?? 'Official'} · ${selectedTournament?.competitionMode === 'qualification_phase' ? 'Qualifs + Main Draw' : 'Main Draw Direct'}`} />
+
+          {publishedPools && (
+            <button onClick={() => navigate('public_pools', selectedTournament?.id)}
+              className="w-full mpl-card p-3 flex items-center gap-3 mb-4 hover:border-mpl-gold/30 transition-all">
+              <Users size={16} className="text-mpl-gold" />
+              <span className="text-sm text-mpl-off-white flex-1 text-left">View Pool Draw & Standings</span>
+              <ChevronRight size={14} className="text-mpl-gray" />
+            </button>
+          )}
+
+          {teams.length === 0 ? (
+            <div className="mpl-card p-4 text-center">
+              <p className="text-sm font-semibold text-white">No validated teams yet</p>
+              <p className="text-xs text-mpl-gray mt-1">The bracket will populate when teams are validated.</p>
             </div>
-            <p className="font-black text-white">{selectedTournament?.name ?? 'MPL Open 2026'}</p>
-            <p className="text-xs text-mpl-gold mt-0.5">Main Draw — Round of {slots.length}</p>
-          </div>
-
-          {/* Quick link to pools */}
-          <button onClick={() => navigate('public_pools')}
-            className="w-full mpl-card p-3 flex items-center gap-3 mb-4 hover:border-mpl-gold/30 transition-all">
-            <Users size={16} className="text-mpl-gold" />
-            <span className="text-sm text-mpl-off-white flex-1 text-left">View Pool Draw & Standings</span>
-            <ChevronRight size={14} className="text-mpl-gray" />
-          </button>
-
-          {/* Bracket */}
-          <p className="section-title">Round of {slots.length} — Bracket</p>
-          <div className="space-y-3">
-            {matchPairs.map(({ slotA, slotB }, i) => (
-              <div key={i} className="mpl-card overflow-hidden">
-                <div className="px-4 py-2 bg-mpl-dark border-b border-mpl-border">
-                  <p className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">Match {i + 1}</p>
-                </div>
-                {[slotA, slotB].filter(Boolean).map((slot, si) => (
-                  <div key={si} className={cn(
-                    'flex items-center gap-3 px-4 py-3',
-                    si === 0 ? 'border-b border-mpl-border/50' : '',
-                    slot?.winnerId ? 'bg-mpl-gold/5' : ''
-                  )}>
-                    {slot?.isBye ? (
-                      <span className="text-xs text-yellow-400 font-bold uppercase tracking-widest w-full">BYE</span>
-                    ) : (
-                      <>
-                        {slot?.team?.seed && (
-                          <span className="text-[9px] bg-gold-gradient text-mpl-black font-black px-1.5 py-0.5 rounded flex-shrink-0">
-                            #{slot.team.seed}
-                          </span>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <MiniStat label="Teams" value={teams.length} />
+                <MiniStat label="Slots" value={slots.length} />
+                <MiniStat label="Matches" value={tournamentMatches.length || matchPairs.length} />
+              </div>
+              <p className="section-title">Round of {slots.length}</p>
+              <div className="space-y-3">
+                {matchPairs.map(({ slotA, slotB }, i) => (
+                  <div key={slotA.id} className="mpl-card overflow-hidden">
+                    <div className="px-4 py-2 bg-mpl-dark border-b border-mpl-border">
+                      <p className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">Match {i + 1}</p>
+                    </div>
+                    {[slotA, slotB].filter((slot): slot is PublicSlot => Boolean(slot)).map((slot, si) => (
+                      <div key={slot.id} className={cn(
+                        'flex items-center gap-3 px-4 py-3',
+                        si === 0 ? 'border-b border-mpl-border/50' : '',
+                        slot.isBye ? 'bg-yellow-500/5' : ''
+                      )}>
+                        {slot.isBye ? (
+                          <span className="text-xs text-yellow-400 font-bold uppercase tracking-widest w-full">BYE</span>
+                        ) : (
+                          <>
+                            {slot.team?.seed && (
+                              <span className="text-[9px] bg-gold-gradient text-mpl-black font-black px-1.5 py-0.5 rounded flex-shrink-0">
+                                #{slot.team.seed}
+                              </span>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{slot.team?.name ?? 'TBD'}</p>
+                              <p className="text-[10px] text-mpl-gray">{slot.team?.clubName ?? ''}</p>
+                            </div>
+                            {slot.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
+                          </>
                         )}
-                        <p className={cn(
-                          'text-sm font-semibold flex-1 truncate',
-                          slot?.team ? 'text-white' : 'text-mpl-gray italic'
-                        )}>
-                          {slot?.team?.name ?? 'TBD'}
-                        </p>
-                        {slot?.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
-                      </>
-                    )}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+function PublicHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="p-4 rounded-2xl bg-gradient-to-br from-mpl-card to-mpl-dark border border-mpl-gold/30 mb-4">
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-2xl bg-gold-gradient flex items-center justify-center flex-shrink-0">
+          <Trophy size={18} className="text-mpl-black" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-black text-white truncate">{title}</p>
+          <p className="text-xs text-mpl-gold mt-0.5 truncate">{subtitle}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PoolTeams({ pool }: { pool: Pool }) {
+  return (
+    <div className="space-y-2">
+      {pool.slots.map(slot => (
+        <div key={slot.id} className={cn(
+          'flex items-center gap-3 p-3 rounded-xl border',
+          slot.isEmpty ? 'border-dashed border-mpl-border' : 'border-mpl-border bg-mpl-dark'
+        )}>
+          <div className="w-7 h-7 rounded-lg bg-mpl-border flex items-center justify-center text-xs font-bold text-mpl-gray flex-shrink-0">
+            {slot.position}
+          </div>
+          {slot.isEmpty ? (
+            <span className="text-sm text-mpl-gray italic">TBD</span>
+          ) : (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {slot.team?.seed && <span className="text-[9px] bg-gold-gradient text-mpl-black font-black px-1.5 py-0.5 rounded flex-shrink-0">#{slot.team.seed}</span>}
+                <p className="text-sm font-semibold text-white truncate">{slot.team?.name}</p>
+              </div>
+              <p className="text-xs text-mpl-gray">{slot.team?.clubName}</p>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PoolStandings({ pool, matches }: { pool: Pool; matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[] }) {
+  const standings = calculatePoolStandings(pool, matches);
+
+  if (standings.length === 0) return null;
+
+  return (
+    <div>
+      <p className="section-title">Standings</p>
+      <div className="mpl-card overflow-hidden">
+        <div className="flex items-center gap-1 px-4 py-2 text-[9px] text-mpl-gray font-bold uppercase tracking-widest bg-mpl-dark border-b border-mpl-border">
+          <span className="w-6">#</span>
+          <span className="flex-1">Team</span>
+          <span className="w-7 text-center">W</span>
+          <span className="w-7 text-center">L</span>
+          <span className="w-9 text-center">Games</span>
+        </div>
+        {standings.map((standing, index) => (
+          <div key={standing.team.id} className={cn(
+            'flex items-center gap-1 px-4 py-2.5 border-b border-mpl-border/40 last:border-0',
+            index < 2 ? 'bg-green-500/5' : ''
+          )}>
+            <div className={cn(
+              'w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0',
+              index === 0 ? 'bg-gold-gradient text-mpl-black' :
+              index === 1 ? 'bg-mpl-border text-mpl-off-white' : 'text-mpl-gray'
+            )}>{index + 1}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{standing.team.name}</p>
+              {index < 2 && <span className="text-[9px] text-green-400 font-bold">Qualified</span>}
+            </div>
+            <span className="w-7 text-center text-sm font-bold text-green-400">{standing.wins}</span>
+            <span className="w-7 text-center text-sm font-bold text-red-400">{standing.losses}</span>
+            <span className="w-9 text-center text-xs text-mpl-gold font-black">{standing.gamesWon}-{standing.gamesLost}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="mpl-card p-3 text-center">
+      <p className="text-lg font-black text-mpl-gold">{value}</p>
+      <p className="text-[9px] text-mpl-gray uppercase tracking-widest">{label}</p>
+    </div>
+  );
+}
+
+interface PublicSlot {
+  id: string;
+  position: number;
+  team?: Team;
+  isBye: boolean;
+  isLocked: boolean;
+}
+
+function buildPublicMainDrawSlots(teams: Team[]): PublicSlot[] {
+  if (teams.length === 0) return [];
+  const bracketSize = nextPowerOfTwo(Math.max(2, teams.length));
+  return Array.from({ length: bracketSize }, (_, index) => {
+    const team = teams[index];
+    return {
+      id: `public-main-slot-${index + 1}`,
+      position: index + 1,
+      team,
+      isBye: !team,
+      isLocked: Boolean(team?.seed),
+    };
+  });
+}
+
+function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[]) {
+  const rows = pool.slots
+    .filter(slot => slot.team)
+    .map(slot => ({
+      team: slot.team!,
+      wins: 0,
+      losses: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+    }));
+
+  const byTeamId = new Map(rows.map(row => [row.team.id, row]));
+
+  matches.filter(match => match.status === 'completed').forEach(match => {
+    if (!match.team1 || !match.team2) return;
+    const row1 = byTeamId.get(match.team1.id);
+    const row2 = byTeamId.get(match.team2.id);
+    if (!row1 || !row2) return;
+
+    match.sets.forEach(set => {
+      row1.gamesWon += set.team1Score;
+      row1.gamesLost += set.team2Score;
+      row2.gamesWon += set.team2Score;
+      row2.gamesLost += set.team1Score;
+    });
+
+    if (match.winnerId === match.team1.id) {
+      row1.wins += 1;
+      row2.losses += 1;
+    } else if (match.winnerId === match.team2.id) {
+      row2.wins += 1;
+      row1.losses += 1;
+    }
+  });
+
+  return rows.sort((a, b) => {
+    const winDiff = b.wins - a.wins;
+    if (winDiff !== 0) return winDiff;
+    const gameDiff = (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost);
+    if (gameDiff !== 0) return gameDiff;
+    return compareTeamsForDraw(a.team, b.team);
+  });
+}
+
+function compareTeamsForDraw(a: Team, b: Team): number {
+  const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
+  if (seedDiff !== 0) return seedDiff;
+  return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+}
+
+function nextPowerOfTwo(value: number): number {
+  let size = 1;
+  while (size < value) size *= 2;
+  return size;
 }

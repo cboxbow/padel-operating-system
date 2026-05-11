@@ -18,6 +18,7 @@ export function MatchSchedulePage() {
   const [editTime, setEditTime] = useState('');
   const [editCourt, setEditCourt] = useState('');
   const [showEdit, setShowEdit] = useState(false);
+  const tournamentMatches = matches.filter(m => m.tournamentId === selectedTournament?.id);
 
   const openEdit = (m: ScheduledMatch) => {
     setEditTarget(m);
@@ -53,7 +54,7 @@ export function MatchSchedulePage() {
 
   // Group matches by date
   const byDate: Record<string, ScheduledMatch[]> = {};
-  matches.forEach(m => {
+  tournamentMatches.forEach(m => {
     const day = m.scheduledTime ? m.scheduledTime.slice(0, 10) : 'Unscheduled';
     if (!byDate[day]) byDate[day] = [];
     byDate[day].push(m);
@@ -63,7 +64,7 @@ export function MatchSchedulePage() {
     <div className="flex flex-col h-full">
       <TopBar
         title="Match Schedule"
-        subtitle={`${matches.filter(m => m.isConfirmed).length}/${matches.length} confirmed`}
+        subtitle={`${tournamentMatches.filter(m => m.isConfirmed).length}/${tournamentMatches.length} confirmed`}
         leftAction={<BackButton onClick={() => navigate('tournament_detail', selectedTournament?.id)} />}
       />
       <div className="flex-1 overflow-y-auto">
@@ -90,6 +91,12 @@ export function MatchSchedulePage() {
           <GoldDivider />
 
           {/* Match schedule by day */}
+          {tournamentMatches.length === 0 && (
+            <div className="mx-4 mt-4 rounded-xl border border-mpl-gold/30 bg-mpl-gold/10 px-3 py-3 text-xs text-mpl-gold">
+              No matches generated yet for this tournament.
+            </div>
+          )}
+
           {Object.entries(byDate).sort().map(([day, dayMatches]) => (
             <div key={day} className="mb-4">
               <div className="flex items-center gap-2 px-4 mb-2">

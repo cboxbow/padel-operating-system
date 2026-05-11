@@ -23,9 +23,11 @@ export function MatchScorePage() {
   const [pendingCorrection, setPendingCorrection] = useState<{ matchId: string; sets: MatchSet[] } | null>(null);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
-  const pools = ['all', 'pool_a', 'pool_b'];
+  const tournamentMatches = matches.filter(m => m.tournamentId === selectedTournament?.id);
+  const poolIds = [...new Set(tournamentMatches.map(m => m.poolId).filter(Boolean) as string[])];
+  const pools = ['all', ...poolIds];
   const filtered = matches.filter(m =>
-    filterPool === 'all' ? true : m.poolId === filterPool
+    m.tournamentId === selectedTournament?.id && (filterPool === 'all' ? true : m.poolId === filterPool)
   );
 
   const openMatch = (match: ScheduledMatch) => {
@@ -124,7 +126,7 @@ export function MatchScorePage() {
                   className={cn('px-4 py-1.5 rounded-full text-xs font-bold border transition-all flex-shrink-0',
                     filterPool === p ? 'bg-mpl-gold text-mpl-black border-mpl-gold' : 'border-mpl-border text-mpl-gray hover:border-mpl-gold/40'
                   )}>
-                  {p === 'all' ? 'All Pools' : p === 'pool_a' ? 'Pool A' : 'Pool B'}
+                  {p === 'all' ? 'All Matches' : `Pool ${p.slice(-1).toUpperCase()}`}
                 </button>
               ))}
             </div>
