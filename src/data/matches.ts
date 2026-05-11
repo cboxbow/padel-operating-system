@@ -183,6 +183,109 @@ export async function fetchMatches(): Promise<ScheduledMatch[]> {
   return (data ?? []).map(row => toScheduledMatch(row as unknown as MatchRow));
 }
 
+export async function generatePoolMatchesForTournament(tournamentId: string): Promise<void> {
+  const { data: event, error: eventError } = await supabase
+    .from('tournament_events')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (eventError) {
+    throw eventError;
+  }
+
+  if (!event) {
+    throw new Error('No tournament event found for this tournament.');
+  }
+
+  const { count, error: countError } = await supabase
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_event_id', event.id);
+
+  if (countError) {
+    throw countError;
+  }
+
+  if ((count ?? 0) > 0) {
+    throw new Error('Matches already exist for this tournament.');
+  }
+
+  const { data: pools, error: poolsError } = await supabase
+    .from('pools')
+    .select('id, pool_slots(position, team_id)')
+    .eq('tournament_event_id', event.id)
+    .in('status', ['published', 'locked'])
+    .order('letter', { ascending: true });
+
+  if (poolsError) {
+    throw poolsError;
+  }
+
+  const matchRows = (pools ?? []).flatMap((pool: any, poolIndex: number) => {
+    const teamIds = [...(pool.pool_slots ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map(slot => slot.team_id)
+      .filter(Boolean);
+
+    const rows = [];
+    for (let i = 0; i < teamIds.length; i += 1) {
+      for (let j = i + 1; j < teamIds.length; j += 1) {
+        rows.push({
+          tournament_event_id: event.id,
+          pool_id: pool.id,
+          round: 1,
+          match_number: poolIndex * 100 + rows.length + 1,
+          team1_id: teamIds[i],
+          team2_id: teamIds[j],
+          status: 'scheduled',
+          is_bye: false,
+        });
+      }
+    }
+    return rows;
+  });
+
+  if (matchRows.length === 0) {
+    throw new Error('No pool matches could be generated. Publish pools with assigned teams first.');
+  }
+
+  const numberedRows = matchRows.map((row, index) => ({ ...row, match_number: index + 1 }));
+  const { error: insertError } = await supabase.from('matches').insert(numberedRows);
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  const { error: poolsUpdateError } = await supabase
+    .from('pools')
+    .update({ matches_generated: true })
+    .eq('tournament_event_id', event.id);
+
+  if (poolsUpdateError) {
+    throw poolsUpdateError;
+  }
+
+  const { error: tournamentError } = await supabase
+    .from('tournaments')
+    .update({ status: 'matches_ongoing' })
+    .eq('id', tournamentId);
+
+  if (tournamentError) {
+    throw tournamentError;
+  }
+
+  const { error: eventStatusError } = await supabase
+    .from('tournament_events')
+    .update({ status: 'matches_ongoing' })
+    .eq('id', event.id);
+
+  if (eventStatusError) {
+    throw eventStatusError;
+  }
+}
+
 export async function saveMatchScore(
   match: ScheduledMatch,
   sets: MatchSet[],

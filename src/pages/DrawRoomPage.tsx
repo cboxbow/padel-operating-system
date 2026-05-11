@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle
 } from 'lucide-react';
@@ -117,7 +117,7 @@ export function DrawRoomPage() {
 
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
 export function PoolDrawPage() {
-  const { navigate, selectedTournament } = useAppState();
+  const { navigate, selectedTournament, setTournamentStatus } = useAppState();
   const { pools, poolsError, registrations, redrawPool, publishPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
   const { addToast } = useToast();
 
@@ -130,6 +130,12 @@ export function PoolDrawPage() {
 
   const tournamentPools = pools.filter(p => p.tournamentId === selectedTournament?.id);
   const pool = tournamentPools.find(p => p.id === selectedPool);
+
+  useEffect(() => {
+    if (!selectedPool && tournamentPools[0]) {
+      setSelectedPool(tournamentPools[0].id);
+    }
+  }, [selectedPool, tournamentPools]);
 
   const validatedTeams = registrations
     .filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
@@ -145,11 +151,23 @@ export function PoolDrawPage() {
     addToast({ type: 'info', title: `${pool.name} Redrawn`, message: 'Pool redrawn. Locked slots preserved.' });
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!pool) return;
-    publishPool(pool.id, publishNote);
-    addToast({ type: 'success', title: `${pool.name} Published!`, message: 'Pool draw is now official and visible to players.' });
-    setShowPublishConfirm(false);
+    try {
+      await publishPool(pool.id, publishNote);
+      const allPoolsPublished = tournamentPools.every(p => p.id === pool.id || p.status === 'published' || p.status === 'locked');
+      if (selectedTournament && allPoolsPublished) {
+        await setTournamentStatus(selectedTournament.id, 'pool_published');
+      }
+      addToast({ type: 'success', title: `${pool.name} Published!`, message: 'Pool draw is now official and visible to players.' });
+      setShowPublishConfirm(false);
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Publish Failed',
+        message: error instanceof Error ? error.message : 'Unable to publish pool.',
+      });
+    }
   };
 
   const handleSlotSwap = (slot: PoolSlot) => {
@@ -367,7 +385,7 @@ export function PoolDrawPage() {
       <ConfirmDialog
         isOpen={showPublishConfirm}
         onClose={() => setShowPublishConfirm(false)}
-        onConfirm={handlePublish}
+        onConfirm={() => void handlePublish()}
         title={`Publish ${pool?.name ?? 'Pool'} Draw?`}
         message="This will make the pool draw official and visible to all players. This action is logged in the audit trail. You can still override slots after publishing."
         confirmLabel="Publish Official Draw"

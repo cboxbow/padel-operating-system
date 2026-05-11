@@ -46,6 +46,29 @@ export async function fetchTournaments(): Promise<Tournament[]> {
   return (data ?? []).map(row => toTournament(row as TournamentRow));
 }
 
+export async function updateTournamentStatus(
+  tournamentId: string,
+  status: Tournament['status'],
+): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ status })
+    .eq('id', tournamentId);
+
+  if (error) {
+    throw error;
+  }
+
+  const { error: eventError } = await supabase
+    .from('tournament_events')
+    .update({ status })
+    .eq('tournament_id', tournamentId);
+
+  if (eventError) {
+    throw eventError;
+  }
+}
+
 export type CreateTournamentInput = {
   name: string;
   eventType: Tournament['eventType'];

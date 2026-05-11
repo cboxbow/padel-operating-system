@@ -187,6 +187,137 @@ export async function updatePoolStatus(poolId: string, status: Pool['status']): 
   }
 }
 
+export async function generatePoolDraw(tournamentId: string, teams: Team[]): Promise<void> {
+  if (teams.length < 2) {
+    throw new Error('At least 2 validated teams are required to generate pools.');
+  }
+
+  const { data: event, error: eventError } = await supabase
+    .from('tournament_events')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (eventError) {
+    throw eventError;
+  }
+
+  if (!event) {
+    throw new Error('No tournament event found for this tournament.');
+  }
+
+  const { data: existingPools, error: existingError } = await supabase
+    .from('pools')
+    .select('id,status')
+    .eq('tournament_event_id', event.id);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if ((existingPools ?? []).some(pool => pool.status !== 'draft')) {
+    throw new Error('Published or locked pools already exist. Unlock/reset them before regenerating.');
+  }
+
+  if ((existingPools ?? []).length > 0) {
+    const { error: deleteError } = await supabase
+      .from('pools')
+      .delete()
+      .eq('tournament_event_id', event.id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+  }
+
+  const sortedTeams = [...teams].sort((a, b) => {
+    const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
+    if (seedDiff !== 0) return seedDiff;
+    return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+  });
+
+  const poolCount = Math.max(1, Math.ceil(sortedTeams.length / 4));
+  const poolSize = Math.ceil(sortedTeams.length / poolCount);
+  const poolLetters = Array.from({ length: poolCount }, (_, index) => String.fromCharCode(65 + index));
+
+  const { data: createdPools, error: poolError } = await supabase
+    .from('pools')
+    .insert(poolLetters.map(letter => ({
+      tournament_event_id: event.id,
+      name: `Pool ${letter}`,
+      letter,
+      max_teams: poolSize,
+      status: 'draft',
+      matches_generated: false,
+    })))
+    .select('id,letter');
+
+  if (poolError) {
+    throw poolError;
+  }
+
+  const slotRows = buildPoolSlots(createdPools ?? [], sortedTeams, poolSize);
+
+  const { error: slotError } = await supabase
+    .from('pool_slots')
+    .insert(slotRows);
+
+  if (slotError) {
+    throw slotError;
+  }
+
+  await updateTournamentStatusByEvent(tournamentId, 'pool_draw_ready');
+}
+
+function buildPoolSlots(
+  pools: { id: string; letter: string }[],
+  teams: Team[],
+  poolSize: number,
+) {
+  const poolTeams = pools.map(() => [] as Team[]);
+
+  teams.forEach((team, index) => {
+    const wave = Math.floor(index / pools.length);
+    const positionInWave = index % pools.length;
+    const poolIndex = wave % 2 === 0 ? positionInWave : pools.length - 1 - positionInWave;
+    poolTeams[poolIndex].push(team);
+  });
+
+  return pools.flatMap((pool, poolIndex) => (
+    Array.from({ length: poolSize }, (_, slotIndex) => {
+      const team = poolTeams[poolIndex][slotIndex];
+      return {
+        pool_id: pool.id,
+        position: slotIndex + 1,
+        team_id: team?.id ?? null,
+        is_locked: Boolean(team?.seed),
+        is_seed_protected: Boolean(team?.seed),
+      };
+    })
+  ));
+}
+
+async function updateTournamentStatusByEvent(tournamentId: string, status: string): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ status })
+    .eq('id', tournamentId);
+
+  if (error) {
+    throw error;
+  }
+
+  const { error: eventError } = await supabase
+    .from('tournament_events')
+    .update({ status })
+    .eq('tournament_id', tournamentId);
+
+  if (eventError) {
+    throw eventError;
+  }
+}
+
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

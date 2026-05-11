@@ -41,7 +41,7 @@ export function useToast() {
 
 // ─── App State Context ────────────────────────────────────────────────────────
 import type { AppView, Tournament, Pool, Team } from './types';
-import { createTournament, fetchTournaments, type CreateTournamentInput } from './data/tournaments';
+import { createTournament, fetchTournaments, updateTournamentStatus, type CreateTournamentInput } from './data/tournaments';
 import {
   createTeamRegistration,
   fetchRegistrations,
@@ -49,8 +49,8 @@ import {
   type CreateTeamRegistrationInput,
 } from './data/registrations';
 import { updateTeamSeed } from './data/teams';
-import { fetchPools, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
-import { fetchMatches, saveMatchScore, updateMatchSchedule } from './data/matches';
+import { fetchPools, generatePoolDraw, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
+import { fetchMatches, generatePoolMatchesForTournament, saveMatchScore, updateMatchSchedule } from './data/matches';
 import { supabase } from './supabaseClient';
 
 interface AppState {
@@ -68,6 +68,7 @@ interface AppStateContextValue extends AppState {
   setSelectedPool: (poolId: string | null) => void;
   refreshTournaments: () => Promise<void>;
   addTournament: (input: CreateTournamentInput) => Promise<void>;
+  setTournamentStatus: (tournamentId: string, status: Tournament['status']) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue>({
@@ -82,6 +83,7 @@ const AppStateContext = createContext<AppStateContextValue>({
   setSelectedPool: () => undefined,
   refreshTournaments: async () => undefined,
   addTournament: async () => undefined,
+  setTournamentStatus: async () => undefined,
 });
 
 import { MOCK_TOURNAMENTS } from './mockData';
@@ -156,8 +158,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setTournamentStatus = useCallback(async (tournamentId: string, status: Tournament['status']) => {
+    await updateTournamentStatus(tournamentId, status);
+    setState(prev => {
+      const tournaments = prev.tournaments.map(t => (
+        t.id === tournamentId ? { ...t, status, updatedAt: new Date().toISOString() } : t
+      ));
+      return {
+        ...prev,
+        tournaments,
+        selectedTournament: prev.selectedTournament?.id === tournamentId
+          ? { ...prev.selectedTournament, status, updatedAt: new Date().toISOString() }
+          : prev.selectedTournament,
+      };
+    });
+  }, []);
+
   return (
-    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments, addTournament }}>
+    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments, addTournament, setTournamentStatus }}>
       {children}
     </AppStateContext.Provider>
   );
@@ -188,12 +206,15 @@ interface TournamentDataContextValue {
   rejectRegistration: (regId: string, reason: string) => Promise<void>;
   addTeamRegistration: (input: CreateTeamRegistrationInput) => Promise<void>;
   refreshRegistrations: () => Promise<void>;
+  generatePools: (tournamentId: string, teams: Team[]) => Promise<void>;
+  refreshPools: () => Promise<void>;
   updatePoolSlot: (poolId: string, position: number, team: Team | undefined) => Promise<void>;
   toggleSlotLock: (poolId: string, position: number) => Promise<void>;
   redrawPool: (poolId: string, teams: Team[]) => void;
   publishPool: (poolId: string, adminNote: string) => Promise<void>;
   updateSeed: (teamId: string, newSeed: number | undefined, reason: string) => Promise<void>;
   completeMatchScore: (match: ScheduledMatch, sets: MatchSet[], reason?: string) => Promise<void>;
+  generatePoolMatches: (tournamentId: string) => Promise<void>;
   scheduleMatch: (match: ScheduledMatch, scheduledAt: string, courtNumber: number | undefined) => Promise<void>;
   refreshMatches: () => Promise<void>;
   overrideStanding: (teamId: string, newPosition: number, reason: string) => void;
@@ -215,12 +236,15 @@ const TournamentDataContext = createContext<TournamentDataContextValue>({
   rejectRegistration: async () => undefined,
   addTeamRegistration: async () => undefined,
   refreshRegistrations: async () => undefined,
+  generatePools: async () => undefined,
+  refreshPools: async () => undefined,
   updatePoolSlot: async () => undefined,
   toggleSlotLock: async () => undefined,
   redrawPool: () => undefined,
   publishPool: async () => undefined,
   updateSeed: async () => undefined,
   completeMatchScore: async () => undefined,
+  generatePoolMatches: async () => undefined,
   scheduleMatch: async () => undefined,
   refreshMatches: async () => undefined,
   overrideStanding: () => undefined,
@@ -361,6 +385,21 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
     });
   }, [addAuditLog]);
 
+  const generatePools = useCallback(async (tournamentId: string, teams: Team[]) => {
+    await generatePoolDraw(tournamentId, teams);
+    await refreshPools();
+    addAuditLog({
+      action: 'POOL_DRAW_GENERATED',
+      module: 'Draw Room',
+      entityType: 'tournament',
+      entityId: tournamentId,
+      description: `Pool draw generated for ${teams.length} validated teams.`,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
+    });
+  }, [addAuditLog, refreshPools]);
+
   const updatePoolSlot = useCallback(async (poolId: string, position: number, team: Team | undefined) => {
     const pool = pools.find(p => p.id === poolId);
     const slot = pool?.slots.find(s => s.position === position);
@@ -487,6 +526,21 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
     });
   }, [addAuditLog]);
 
+  const generatePoolMatches = useCallback(async (tournamentId: string) => {
+    await generatePoolMatchesForTournament(tournamentId);
+    await refreshMatches();
+    addAuditLog({
+      action: 'POOL_MATCHES_GENERATED',
+      module: 'Match Schedule',
+      entityType: 'tournament',
+      entityId: tournamentId,
+      description: 'Pool round-robin matches generated.',
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
+    });
+  }, [addAuditLog, refreshMatches]);
+
   const scheduleMatch = useCallback(async (match: ScheduledMatch, scheduledAt: string, courtNumber: number | undefined) => {
     await updateMatchSchedule(match, scheduledAt, courtNumber);
     setMatches(prev => prev.map(m => (
@@ -529,8 +583,8 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
   return (
     <TournamentDataContext.Provider value={{
       registrations, pools, standings, matches, auditLogs, overrides, registrationsError, poolsError, matchesError,
-      validateRegistration, rejectRegistration, addTeamRegistration, refreshRegistrations, updatePoolSlot, toggleSlotLock,
-      redrawPool, publishPool, updateSeed, completeMatchScore, scheduleMatch, refreshMatches,
+      validateRegistration, rejectRegistration, addTeamRegistration, refreshRegistrations, generatePools, refreshPools, updatePoolSlot, toggleSlotLock,
+      redrawPool, publishPool, updateSeed, completeMatchScore, generatePoolMatches, scheduleMatch, refreshMatches,
       overrideStanding, addAuditLog, addOverride,
     }}>
       {children}

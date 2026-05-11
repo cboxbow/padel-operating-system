@@ -1,8 +1,8 @@
 import {
   Users, ClipboardList, Star, GitBranch, Trophy,
-  Lock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe
+  Lock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe, Play
 } from 'lucide-react';
-import { useAppState } from '../context';
+import { useAppState, useToast, useTournamentData } from '../context';
 import {
   TopBar, WorkflowStepper
 } from '../components/Navigation';
@@ -46,10 +46,20 @@ interface AdminAction {
 }
 
 export function TournamentDetailPage() {
-  const { selectedTournament, navigate } = useAppState();
+  const { selectedTournament, navigate, setTournamentStatus } = useAppState();
+  const { registrations, pools, matches, generatePools, generatePoolMatches } = useTournamentData();
+  const { addToast } = useToast();
 
   if (!selectedTournament) return null;
   const t = selectedTournament;
+  const tournamentRegistrations = registrations.filter(r => r.tournamentId === t.id);
+  const validatedTeams = tournamentRegistrations
+    .filter(r => r.status === 'validated')
+    .map(r => r.team);
+  const tournamentPools = pools.filter(p => p.tournamentId === t.id);
+  const tournamentMatches = matches.filter(m => m.tournamentId === t.id);
+  const liveRegisteredTeams = tournamentRegistrations.length || t.registeredTeams;
+  const liveValidatedTeams = validatedTeams.length || t.validatedTeams;
 
   const steps = WORKFLOW_STEPS.map(s => ({
     label: s.label,
@@ -71,7 +81,7 @@ export function TournamentDetailPage() {
       view: 'team_list',
       color: 'text-blue-400',
       description: 'View & manage final validated teams',
-      enabled: t.validatedTeams > 0,
+      enabled: liveValidatedTeams > 0,
     },
     {
       label: 'Seed Editor',
@@ -79,7 +89,7 @@ export function TournamentDetailPage() {
       view: 'seed_editor',
       color: 'text-mpl-gold',
       description: 'Assign and lock team seeds',
-      enabled: t.validatedTeams > 0,
+      enabled: liveValidatedTeams > 0,
     },
     {
       label: 'Draw Room',
@@ -87,7 +97,7 @@ export function TournamentDetailPage() {
       view: 'draw_room',
       color: 'text-green-400',
       description: 'Pool draw, main draw, publish & lock',
-      enabled: t.validatedTeams >= 2,
+      enabled: liveValidatedTeams >= 2,
     },
     {
       label: 'Pool Draw',
@@ -111,7 +121,7 @@ export function TournamentDetailPage() {
       view: 'match_score',
       color: 'text-yellow-400',
       description: 'Enter & correct set-by-set match scores',
-      enabled: ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
+      enabled: tournamentMatches.length > 0 && ['matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
     },
     {
       label: 'Pool Standings',
@@ -119,7 +129,7 @@ export function TournamentDetailPage() {
       view: 'pool_standings',
       color: 'text-cyan-400',
       description: 'Live standings with admin override option',
-      enabled: t.validatedTeams > 0,
+      enabled: liveValidatedTeams > 0,
     },
     {
       label: 'Qualified Teams',
@@ -135,7 +145,7 @@ export function TournamentDetailPage() {
       view: 'match_schedule',
       color: 'text-indigo-400',
       description: 'Assign courts & time slots to matches',
-      enabled: t.status !== 'draft',
+      enabled: tournamentMatches.length > 0,
     },
     {
       label: 'Public View',
@@ -148,6 +158,47 @@ export function TournamentDetailPage() {
   ];
 
   const isLocked = t.status === 'locked' || t.status === 'completed';
+
+  const runWorkflowAction = async (nextStatus: TournamentStatus, message: string) => {
+    try {
+      await setTournamentStatus(t.id, nextStatus);
+      addToast({ type: 'success', title: 'Workflow Updated', message });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Workflow Failed',
+        message: error instanceof Error ? error.message : 'Unable to update tournament status.',
+      });
+    }
+  };
+
+  const handleGeneratePools = async () => {
+    try {
+      await generatePools(t.id, validatedTeams);
+      await setTournamentStatus(t.id, 'pool_draw_ready');
+      addToast({ type: 'success', title: 'Pools Generated', message: `${validatedTeams.length} teams placed into pools.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Pool Generation Failed',
+        message: error instanceof Error ? error.message : 'Unable to generate pools.',
+      });
+    }
+  };
+
+  const handleGenerateMatches = async () => {
+    try {
+      await generatePoolMatches(t.id);
+      await setTournamentStatus(t.id, 'matches_ongoing');
+      addToast({ type: 'success', title: 'Matches Generated', message: 'Pool round-robin schedule is ready.' });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Match Generation Failed',
+        message: error instanceof Error ? error.message : 'Unable to generate matches.',
+      });
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -185,8 +236,8 @@ export function TournamentDetailPage() {
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2">
-              <StatCard label="Registered" value={t.registeredTeams} />
-              <StatCard label="Validated" value={t.validatedTeams} color="text-green-400" />
+              <StatCard label="Registered" value={liveRegisteredTeams} />
+              <StatCard label="Validated" value={liveValidatedTeams} color="text-green-400" />
               <StatCard label="Max Teams" value={t.maxTeams} color="text-mpl-gray" />
             </div>
           </div>
@@ -198,6 +249,23 @@ export function TournamentDetailPage() {
             <p className="section-title">Tournament Workflow</p>
             <div className="mpl-card p-4 overflow-x-auto">
               <WorkflowStepper steps={steps} />
+            </div>
+          </div>
+
+          <div className="px-4 mt-3">
+            <p className="section-title">Next Step</p>
+            <div className="mpl-card p-4 space-y-3">
+              <WorkflowActionPanel
+                status={t.status}
+                validatedTeams={liveValidatedTeams}
+                poolCount={tournamentPools.length}
+                matchCount={tournamentMatches.length}
+                onOpenRegistrations={() => void runWorkflowAction('registration_open', 'Registrations are now open.')}
+                onCloseRegistrations={() => void runWorkflowAction('registration_closed', 'Registrations closed. Move to seed review.')}
+                onPrepareSeeds={() => void runWorkflowAction('draw_preparation', 'Seed review is ready.')}
+                onGeneratePools={() => void handleGeneratePools()}
+                onGenerateMatches={() => void handleGenerateMatches()}
+              />
             </div>
           </div>
 
@@ -245,5 +313,101 @@ export function TournamentDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkflowActionPanel({
+  status,
+  validatedTeams,
+  poolCount,
+  matchCount,
+  onOpenRegistrations,
+  onCloseRegistrations,
+  onPrepareSeeds,
+  onGeneratePools,
+  onGenerateMatches,
+}: {
+  status: TournamentStatus;
+  validatedTeams: number;
+  poolCount: number;
+  matchCount: number;
+  onOpenRegistrations: () => void;
+  onCloseRegistrations: () => void;
+  onPrepareSeeds: () => void;
+  onGeneratePools: () => void;
+  onGenerateMatches: () => void;
+}) {
+  if (status === 'draft') {
+    return <StepButton label="Open Registrations" description="Start accepting or importing teams." onClick={onOpenRegistrations} />;
+  }
+
+  if (status === 'registration_open') {
+    return (
+      <StepButton
+        label="Close Registrations"
+        description={`${validatedTeams} validated teams ready for seeding.`}
+        onClick={onCloseRegistrations}
+        disabled={validatedTeams < 2}
+      />
+    );
+  }
+
+  if (status === 'registration_closed') {
+    return <StepButton label="Prepare Seeds" description="Review imported seeds and lock final team order." onClick={onPrepareSeeds} disabled={validatedTeams < 2} />;
+  }
+
+  if (status === 'draw_preparation') {
+    return <StepButton label="Generate Pool Draw" description="Create balanced pools from validated teams and seeds." onClick={onGeneratePools} disabled={validatedTeams < 2} />;
+  }
+
+  if (status === 'pool_draw_ready') {
+    return (
+      <div>
+        <p className="text-sm font-semibold text-white">{poolCount} pools ready</p>
+        <p className="text-xs text-mpl-gray mt-1">Open Pool Draw below, review slots, then publish each official pool.</p>
+      </div>
+    );
+  }
+
+  if (status === 'pool_published') {
+    return (
+      <StepButton
+        label="Generate Pool Matches"
+        description={`${poolCount} pools published. ${matchCount} matches already exist.`}
+        onClick={onGenerateMatches}
+        disabled={poolCount === 0 || matchCount > 0}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-white">Workflow active</p>
+      <p className="text-xs text-mpl-gray mt-1">Continue through the enabled modules below.</p>
+    </div>
+  );
+}
+
+function StepButton({
+  label,
+  description,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="w-full btn-gold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Play size={14} />
+      <span>{label}</span>
+      <span className="hidden">{description}</span>
+    </button>
   );
 }
