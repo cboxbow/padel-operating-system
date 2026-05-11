@@ -2,8 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 
+type AppRole = 'player' | 'admin' | 'super_admin';
+
+interface AuthProfile {
+  id: string;
+  email: string | null;
+  fullName: string | null;
+  role: AppRole;
+}
+
 interface AuthContextValue {
   session: Session | null;
+  profile: AuthProfile | null;
+  profileError: string | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -11,6 +22,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   session: null,
+  profile: null,
+  profileError: null,
   isLoading: true,
   signIn: async () => undefined,
   signOut: async () => undefined,
@@ -18,6 +31,8 @@ const AuthContext = createContext<AuthContextValue>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<AuthProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -26,12 +41,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (!isMounted) return;
       setSession(data.session);
-      setIsLoading(false);
+      void loadProfile(data.session, isMounted, setProfile, setProfileError, setIsLoading);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      setIsLoading(false);
+      void loadProfile(nextSession, true, setProfile, setProfileError, setIsLoading);
     });
 
     return () => {
@@ -48,18 +63,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    setProfile(null);
+    setProfileError(null);
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
+    profile,
+    profileError,
     isLoading,
     signIn,
     signOut,
-  }), [isLoading, session, signIn, signOut]);
+  }), [isLoading, profile, profileError, session, signIn, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   return useContext(AuthContext);
+}
+
+async function loadProfile(
+  nextSession: Session | null,
+  isMounted: boolean,
+  setProfile: (profile: AuthProfile | null) => void,
+  setProfileError: (error: string | null) => void,
+  setIsLoading: (loading: boolean) => void,
+) {
+  if (!nextSession) {
+    setProfile(null);
+    setProfileError(null);
+    setIsLoading(false);
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,email,full_name,role')
+    .eq('id', nextSession.user.id)
+    .maybeSingle();
+
+  if (!isMounted) return;
+
+  if (error) {
+    setProfile(null);
+    setProfileError(error.message);
+    setIsLoading(false);
+    return;
+  }
+
+  if (!data) {
+    setProfile(null);
+    setProfileError('Aucun profil Supabase trouve pour cet utilisateur.');
+    setIsLoading(false);
+    return;
+  }
+
+  setProfile({
+    id: data.id,
+    email: data.email,
+    fullName: data.full_name,
+    role: data.role,
+  });
+  setProfileError(null);
+  setIsLoading(false);
 }

@@ -58,6 +58,7 @@ export type CreateTournamentInput = {
 };
 
 export async function createTournament(input: CreateTournamentInput): Promise<Tournament> {
+  const adminProfileId = await assertCanCreateTournament();
   const { data: tournament, error } = await supabase
     .from('tournaments')
     .insert({
@@ -69,6 +70,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
       end_date: input.endDate,
       venue: input.venue,
       max_teams: input.maxTeams,
+      created_by: adminProfileId,
     })
     .select('id,name,event_type,category,status,start_date,end_date,venue,max_teams,created_at,updated_at')
     .single();
@@ -97,4 +99,31 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
   }
 
   return toTournament(row);
+}
+
+async function assertCanCreateTournament(): Promise<string> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    throw new Error('Connecte-toi avec un compte Supabase admin avant de creer un tournoi.');
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id,role')
+    .eq('id', userData.user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(`Impossible de verifier le role admin: ${profileError.message}`);
+  }
+
+  if (!profile) {
+    throw new Error('Aucun profil trouve pour ce login. Ajoute une ligne dans public.profiles pour cet utilisateur avec role = super_admin.');
+  }
+
+  if (!['admin', 'super_admin'].includes(profile.role)) {
+    throw new Error(`Ce compte a le role "${profile.role}". Il faut admin ou super_admin pour creer un tournoi.`);
+  }
+
+  return profile.id;
 }

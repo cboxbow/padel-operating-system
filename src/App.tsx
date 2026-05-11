@@ -67,7 +67,7 @@ export default function App() {
 }
 
 function AppGate() {
-  const { session, isLoading } = useAuth();
+  const { session, profile, profileError, isLoading, signOut } = useAuth();
 
   if (isLoading) {
     return (
@@ -79,6 +79,27 @@ function AppGate() {
 
   if (!session) {
     return <LoginPage />;
+  }
+
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    return (
+      <div className="min-h-screen bg-mpl-black flex items-center justify-center px-5">
+        <div className="w-full max-w-sm mpl-card p-5 space-y-4">
+          <div>
+            <p className="text-white font-black text-sm tracking-wide">Admin access blocked</p>
+            <p className="text-xs text-mpl-gray mt-1">
+              {profileError || `Role actuel: ${profile?.role ?? 'aucun profil'}. Il faut admin ou super_admin.`}
+            </p>
+          </div>
+          <div className="rounded-lg border border-mpl-gold/30 bg-mpl-gold/10 px-3 py-2 text-xs text-mpl-gold">
+            Cree ou mets a jour le profil Supabase de ce compte avec le role super_admin, puis reconnecte-toi.
+          </div>
+          <button className="btn-gold w-full" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
