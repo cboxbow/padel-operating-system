@@ -23,6 +23,7 @@ export function TournamentsPage() {
     eventType: 'doubles' as Tournament['eventType'],
     category: 'open' as Tournament['category'],
     status: 'draft' as Tournament['status'],
+    competitionMode: 'main_draw_direct' as Tournament['competitionMode'],
   });
 
   const filtered = tournaments.filter(t => {
@@ -54,6 +55,7 @@ export function TournamentsPage() {
         eventType: form.eventType,
         category: form.category,
         status: form.status,
+        competitionMode: form.competitionMode,
       });
       addToast({ type: 'success', title: 'Tournament Created', message: form.name.trim() });
       setShowCreate(false);
@@ -66,6 +68,7 @@ export function TournamentsPage() {
         eventType: 'doubles',
         category: 'open',
         status: 'draft',
+        competitionMode: 'main_draw_direct',
       });
     } catch (error) {
       addToast({
@@ -174,6 +177,17 @@ export function TournamentsPage() {
               <label className="section-title">End</label>
               <input type="date" className="input-field" value={form.endDate} onChange={e => setForm(prev => ({ ...prev, endDate: e.target.value }))} />
             </div>
+          </div>
+          <div>
+            <label className="section-title">Competition Flow</label>
+            <select
+              className="input-field"
+              value={form.competitionMode}
+              onChange={e => setForm(prev => ({ ...prev, competitionMode: e.target.value as Tournament['competitionMode'] }))}
+            >
+              <option value="main_draw_direct">Main Draw Direct</option>
+              <option value="qualification_phase">Phase Qualifs</option>
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

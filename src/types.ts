@@ -17,6 +17,7 @@ export type RegistrationStatus = 'pending' | 'validated' | 'rejected' | 'waitlis
 export type DrawSessionStatus = 'draft' | 'published' | 'locked';
 export type MatchStatus = 'scheduled' | 'ongoing' | 'completed' | 'walkover';
 export type OverrideType = 'seed_change' | 'slot_swap' | 'score_correction' | 'status_override' | 'manual_placement';
+export type CompetitionMode = 'main_draw_direct' | 'qualification_phase';
 
 export interface Club {
   id: string;
@@ -55,6 +56,7 @@ export interface Tournament {
   eventType: 'singles' | 'doubles' | 'mixed_doubles';
   category: 'open' | 'pro' | 'amateur' | 'junior' | 'senior';
   status: TournamentStatus;
+  competitionMode: CompetitionMode;
   startDate: string;
   endDate: string;
   venue: string;

@@ -8,7 +8,7 @@ import {
 } from '../components/Navigation';
 import { BackButton, GoldDivider, StatCard } from '../components/UI';
 import { tournamentStatusClass, getTournamentStatusLabel, formatDate } from '../lib';
-import type { TournamentStatus } from '../types';
+import type { CompetitionMode, TournamentStatus } from '../types';
 import { cn } from '../lib';
 
 const WORKFLOW_STEPS: { label: string; statuses: TournamentStatus[] }[] = [
@@ -46,7 +46,7 @@ interface AdminAction {
 }
 
 export function TournamentDetailPage() {
-  const { selectedTournament, navigate, setTournamentStatus } = useAppState();
+  const { selectedTournament, navigate, setTournamentMode, setTournamentStatus } = useAppState();
   const { registrations, pools, matches, generatePools, generatePoolMatches } = useTournamentData();
   const { addToast } = useToast();
 
@@ -60,6 +60,13 @@ export function TournamentDetailPage() {
   const tournamentMatches = matches.filter(m => m.tournamentId === t.id);
   const liveRegisteredTeams = tournamentRegistrations.length || t.registeredTeams;
   const liveValidatedTeams = validatedTeams.length || t.validatedTeams;
+  const qualifTeams = validatedTeams.filter(team => {
+    const registration = tournamentRegistrations.find(r => r.team.id === team.id);
+    return registration?.notes?.toUpperCase().includes('DRAW ENTRY: QUALIF');
+  });
+  const poolEligibleTeams = t.competitionMode === 'qualification_phase' && qualifTeams.length >= 2
+    ? qualifTeams
+    : validatedTeams;
 
   const steps = WORKFLOW_STEPS.map(s => ({
     label: s.label,
@@ -105,7 +112,7 @@ export function TournamentDetailPage() {
       view: 'pool_draw',
       color: 'text-purple-400',
       description: 'Manage pool slots and publish pools',
-      enabled: t.status !== 'draft',
+      enabled: t.competitionMode === 'qualification_phase' && t.status !== 'draft',
     },
     {
       label: 'Main Draw',
@@ -129,7 +136,7 @@ export function TournamentDetailPage() {
       view: 'pool_standings',
       color: 'text-cyan-400',
       description: 'Live standings with admin override option',
-      enabled: liveValidatedTeams > 0,
+      enabled: t.competitionMode === 'qualification_phase' && liveValidatedTeams > 0,
     },
     {
       label: 'Qualified Teams',
@@ -137,7 +144,7 @@ export function TournamentDetailPage() {
       view: 'qualified_teams',
       color: 'text-green-400',
       description: 'Confirm teams advancing to Main Draw',
-      enabled: ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
+      enabled: t.competitionMode === 'qualification_phase' && ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
     },
     {
       label: 'Match Schedule',
@@ -174,14 +181,44 @@ export function TournamentDetailPage() {
 
   const handleGeneratePools = async () => {
     try {
-      await generatePools(t.id, validatedTeams);
+      await generatePools(t.id, poolEligibleTeams);
       await setTournamentStatus(t.id, 'pool_draw_ready');
-      addToast({ type: 'success', title: 'Pools Generated', message: `${validatedTeams.length} teams placed into pools.` });
+      addToast({ type: 'success', title: 'Qualif Pools Generated', message: `${poolEligibleTeams.length} teams placed into qualification pools.` });
     } catch (error) {
       addToast({
         type: 'error',
         title: 'Pool Generation Failed',
         message: error instanceof Error ? error.message : 'Unable to generate pools.',
+      });
+    }
+  };
+
+  const handlePrepareMainDraw = async () => {
+    try {
+      await setTournamentStatus(t.id, 'main_draw_ready');
+      addToast({ type: 'success', title: 'Main Draw Ready', message: 'Direct bracket flow is ready.' });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Workflow Failed',
+        message: error instanceof Error ? error.message : 'Unable to prepare main draw.',
+      });
+    }
+  };
+
+  const handleModeChange = async (competitionMode: CompetitionMode) => {
+    try {
+      await setTournamentMode(t.id, competitionMode);
+      addToast({
+        type: 'success',
+        title: 'Competition Flow Updated',
+        message: competitionMode === 'qualification_phase' ? 'Phase qualifs enabled.' : 'Main draw direct enabled.',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Mode Update Failed',
+        message: error instanceof Error ? error.message : 'Unable to update competition flow.',
       });
     }
   };
@@ -228,6 +265,18 @@ export function TournamentDetailPage() {
                 <span className="text-mpl-gray">Format</span>
                 <span className="text-white font-medium capitalize">{t.eventType.replace('_', ' ')} · {t.category}</span>
               </div>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-mpl-gray">Flow</span>
+                <select
+                  className="input-field max-w-[58%] py-1.5 text-xs"
+                  value={t.competitionMode}
+                  onChange={event => void handleModeChange(event.target.value as CompetitionMode)}
+                  disabled={!['draft', 'registration_open', 'registration_closed', 'draw_preparation'].includes(t.status)}
+                >
+                  <option value="main_draw_direct">Main Draw Direct</option>
+                  <option value="qualification_phase">Phase Qualifs</option>
+                </select>
+              </div>
               <div className="flex justify-between text-sm">
                 <span className="text-mpl-gray">Capacity</span>
                 <span className="text-white font-medium">{t.maxTeams} teams max</span>
@@ -257,13 +306,16 @@ export function TournamentDetailPage() {
             <div className="mpl-card p-4 space-y-3">
               <WorkflowActionPanel
                 status={t.status}
+                competitionMode={t.competitionMode}
                 validatedTeams={liveValidatedTeams}
+                qualifTeams={qualifTeams.length}
                 poolCount={tournamentPools.length}
                 matchCount={tournamentMatches.length}
                 onOpenRegistrations={() => void runWorkflowAction('registration_open', 'Registrations are now open.')}
                 onCloseRegistrations={() => void runWorkflowAction('registration_closed', 'Registrations closed. Move to seed review.')}
                 onPrepareSeeds={() => void runWorkflowAction('draw_preparation', 'Seed review is ready.')}
                 onGeneratePools={() => void handleGeneratePools()}
+                onPrepareMainDraw={() => void handlePrepareMainDraw()}
                 onGenerateMatches={() => void handleGenerateMatches()}
               />
             </div>
@@ -318,23 +370,29 @@ export function TournamentDetailPage() {
 
 function WorkflowActionPanel({
   status,
+  competitionMode,
   validatedTeams,
+  qualifTeams,
   poolCount,
   matchCount,
   onOpenRegistrations,
   onCloseRegistrations,
   onPrepareSeeds,
   onGeneratePools,
+  onPrepareMainDraw,
   onGenerateMatches,
 }: {
   status: TournamentStatus;
+  competitionMode: CompetitionMode;
   validatedTeams: number;
+  qualifTeams: number;
   poolCount: number;
   matchCount: number;
   onOpenRegistrations: () => void;
   onCloseRegistrations: () => void;
   onPrepareSeeds: () => void;
   onGeneratePools: () => void;
+  onPrepareMainDraw: () => void;
   onGenerateMatches: () => void;
 }) {
   if (status === 'draft') {
@@ -357,7 +415,18 @@ function WorkflowActionPanel({
   }
 
   if (status === 'draw_preparation') {
-    return <StepButton label="Generate Pool Draw" description="Create balanced pools from validated teams and seeds." onClick={onGeneratePools} disabled={validatedTeams < 2} />;
+    if (competitionMode === 'main_draw_direct') {
+      return <StepButton label="Prepare Main Draw" description="Skip qualification groups and go directly to the bracket." onClick={onPrepareMainDraw} disabled={validatedTeams < 2} />;
+    }
+
+    return (
+      <StepButton
+        label="Generate Qualif Pools"
+        description={`${qualifTeams || validatedTeams} teams will be placed in qualification pools.`}
+        onClick={onGeneratePools}
+        disabled={(qualifTeams || validatedTeams) < 2}
+      />
+    );
   }
 
   if (status === 'pool_draw_ready') {

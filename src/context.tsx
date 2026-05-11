@@ -41,7 +41,7 @@ export function useToast() {
 
 // ─── App State Context ────────────────────────────────────────────────────────
 import type { AppView, Tournament, Pool, Team } from './types';
-import { createTournament, fetchTournaments, updateTournamentStatus, type CreateTournamentInput } from './data/tournaments';
+import { createTournament, fetchTournaments, updateTournamentMode, updateTournamentStatus, type CreateTournamentInput } from './data/tournaments';
 import {
   createTeamRegistration,
   fetchRegistrations,
@@ -69,6 +69,7 @@ interface AppStateContextValue extends AppState {
   refreshTournaments: () => Promise<void>;
   addTournament: (input: CreateTournamentInput) => Promise<void>;
   setTournamentStatus: (tournamentId: string, status: Tournament['status']) => Promise<void>;
+  setTournamentMode: (tournamentId: string, competitionMode: Tournament['competitionMode']) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue>({
@@ -84,6 +85,7 @@ const AppStateContext = createContext<AppStateContextValue>({
   refreshTournaments: async () => undefined,
   addTournament: async () => undefined,
   setTournamentStatus: async () => undefined,
+  setTournamentMode: async () => undefined,
 });
 
 import { MOCK_TOURNAMENTS } from './mockData';
@@ -174,8 +176,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setTournamentMode = useCallback(async (tournamentId: string, competitionMode: Tournament['competitionMode']) => {
+    await updateTournamentMode(tournamentId, competitionMode);
+    setState(prev => {
+      const tournaments = prev.tournaments.map(t => (
+        t.id === tournamentId ? { ...t, competitionMode, updatedAt: new Date().toISOString() } : t
+      ));
+      return {
+        ...prev,
+        tournaments,
+        selectedTournament: prev.selectedTournament?.id === tournamentId
+          ? { ...prev.selectedTournament, competitionMode, updatedAt: new Date().toISOString() }
+          : prev.selectedTournament,
+      };
+    });
+  }, []);
+
   return (
-    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments, addTournament, setTournamentStatus }}>
+    <AppStateContext.Provider value={{ ...state, navigate, setSelectedPool, refreshTournaments, addTournament, setTournamentStatus, setTournamentMode }}>
       {children}
     </AppStateContext.Provider>
   );
