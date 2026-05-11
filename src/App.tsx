@@ -1,4 +1,5 @@
 import { ToastProvider, AppStateProvider, TournamentDataProvider, useAppState } from './context';
+import { AuthProvider, useAuth } from './auth';
 import { BottomNav } from './components/Navigation';
 import { ToastContainer } from './components/UI';
 import { DashboardPage } from './pages/DashboardPage';
@@ -14,6 +15,7 @@ import { PoolStandingsPage } from './pages/PoolStandingsPage';
 import { QualifiedTeamsPage } from './pages/QualifiedTeamsPage';
 import { MatchSchedulePage } from './pages/MatchSchedulePage';
 import { PublicPoolsPage, PublicBracketPage } from './pages/PublicViewsPage';
+import { LoginPage } from './pages/LoginPage';
 
 function AppContent() {
   const { currentView } = useAppState();
@@ -56,12 +58,34 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AppStateProvider>
-        <TournamentDataProvider>
-          <AppContent />
-        </TournamentDataProvider>
-      </AppStateProvider>
-    </ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <AppGate />
+      </ToastProvider>
+    </AuthProvider>
+  );
+}
+
+function AppGate() {
+  const { session, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-mpl-black flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-mpl-border border-t-mpl-gold animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  return (
+    <AppStateProvider>
+      <TournamentDataProvider>
+        <AppContent />
+      </TournamentDataProvider>
+    </AppStateProvider>
   );
 }

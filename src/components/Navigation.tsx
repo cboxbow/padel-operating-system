@@ -5,6 +5,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useAppState } from '../context';
+import { useAuth } from '../auth';
 import { cn } from '../lib';
 import type { AppView } from '../types';
 
@@ -83,6 +84,8 @@ export function TopBar({ title, subtitle, leftAction, rightAction }: TopBarProps
 
 // ─── MPL Logo Header ──────────────────────────────────────────────────────────
 export function MPLHeader() {
+  const { signOut } = useAuth();
+
   return (
     <div className="flex items-center gap-3 px-4 py-4 border-b border-mpl-border/50">
       <div className="w-10 h-10 rounded-xl bg-gold-gradient flex items-center justify-center flex-shrink-0 shadow-gold-sm">
@@ -93,9 +96,13 @@ export function MPLHeader() {
         <p className="text-[10px] text-mpl-gold font-semibold tracking-widest uppercase">Admin Control Center</p>
       </div>
       <div className="ml-auto">
-        <div className="w-8 h-8 rounded-full bg-mpl-card border border-mpl-border flex items-center justify-center">
+        <button
+          onClick={() => void signOut()}
+          className="w-8 h-8 rounded-full bg-mpl-card border border-mpl-border flex items-center justify-center hover:border-mpl-gold/40 transition-colors"
+          title="Sign out"
+        >
           <span className="text-xs font-bold text-mpl-gold">AM</span>
-        </div>
+        </button>
       </div>
     </div>
   );
