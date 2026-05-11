@@ -67,6 +67,11 @@ export function TournamentDetailPage() {
   const poolEligibleTeams = t.competitionMode === 'qualification_phase' && qualifTeams.length >= 2
     ? qualifTeams
     : validatedTeams;
+  const drawStarted = !['draft', 'registration_open', 'registration_closed'].includes(t.status);
+  const canOpenMainDraw = t.competitionMode === 'main_draw_direct'
+    ? liveValidatedTeams >= 2 && drawStarted
+    : ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published', 'locked', 'completed'].includes(t.status);
+  const canOpenPoolModules = t.competitionMode === 'qualification_phase' && liveValidatedTeams >= 2 && drawStarted;
 
   const steps = WORKFLOW_STEPS.map(s => ({
     label: s.label,
@@ -88,7 +93,7 @@ export function TournamentDetailPage() {
       view: 'team_list',
       color: 'text-blue-400',
       description: 'View & manage final validated teams',
-      enabled: liveValidatedTeams > 0,
+      enabled: liveRegisteredTeams > 0 || liveValidatedTeams > 0,
     },
     {
       label: 'Seed Editor',
@@ -96,7 +101,7 @@ export function TournamentDetailPage() {
       view: 'seed_editor',
       color: 'text-mpl-gold',
       description: 'Assign and lock team seeds',
-      enabled: liveValidatedTeams > 0,
+      enabled: liveValidatedTeams > 0 || liveRegisteredTeams > 0,
     },
     {
       label: 'Draw Room',
@@ -104,7 +109,7 @@ export function TournamentDetailPage() {
       view: 'draw_room',
       color: 'text-green-400',
       description: 'Pool draw, main draw, publish & lock',
-      enabled: liveValidatedTeams >= 2,
+      enabled: liveValidatedTeams >= 2 || drawStarted,
     },
     {
       label: 'Pool Draw',
@@ -112,7 +117,7 @@ export function TournamentDetailPage() {
       view: 'pool_draw',
       color: 'text-purple-400',
       description: 'Manage pool slots and publish pools',
-      enabled: t.competitionMode === 'qualification_phase' && t.status !== 'draft',
+      enabled: canOpenPoolModules,
     },
     {
       label: 'Main Draw',
@@ -120,7 +125,7 @@ export function TournamentDetailPage() {
       view: 'main_draw',
       color: 'text-red-400',
       description: 'Bracket placement, BYEs, publish & lock',
-      enabled: ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published', 'locked', 'completed'].includes(t.status),
+      enabled: canOpenMainDraw,
     },
     {
       label: 'Match Scores',
@@ -128,7 +133,7 @@ export function TournamentDetailPage() {
       view: 'match_score',
       color: 'text-yellow-400',
       description: 'Enter & correct set-by-set match scores',
-      enabled: tournamentMatches.length > 0 && ['matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
+      enabled: drawStarted,
     },
     {
       label: 'Pool Standings',
@@ -136,7 +141,7 @@ export function TournamentDetailPage() {
       view: 'pool_standings',
       color: 'text-cyan-400',
       description: 'Live standings with admin override option',
-      enabled: t.competitionMode === 'qualification_phase' && liveValidatedTeams > 0,
+      enabled: canOpenPoolModules,
     },
     {
       label: 'Qualified Teams',
@@ -144,7 +149,7 @@ export function TournamentDetailPage() {
       view: 'qualified_teams',
       color: 'text-green-400',
       description: 'Confirm teams advancing to Main Draw',
-      enabled: t.competitionMode === 'qualification_phase' && ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published'].includes(t.status),
+      enabled: canOpenPoolModules,
     },
     {
       label: 'Match Schedule',
@@ -152,7 +157,7 @@ export function TournamentDetailPage() {
       view: 'match_schedule',
       color: 'text-indigo-400',
       description: 'Assign courts & time slots to matches',
-      enabled: tournamentMatches.length > 0,
+      enabled: drawStarted,
     },
     {
       label: 'Public View',
@@ -160,7 +165,7 @@ export function TournamentDetailPage() {
       view: 'public_bracket',
       color: 'text-emerald-400',
       description: 'Player-facing pool draw & bracket view',
-      enabled: ['pool_published', 'matches_ongoing', 'main_draw_ready', 'main_draw_published', 'locked', 'completed'].includes(t.status),
+      enabled: canOpenMainDraw || canOpenPoolModules,
     },
   ];
 
