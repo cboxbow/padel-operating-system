@@ -116,6 +116,161 @@ export async function fetchRegistrations(): Promise<Registration[]> {
   return (data ?? []).map(row => toRegistration(row as unknown as RegistrationRow));
 }
 
+export interface CreateTeamRegistrationInput {
+  tournamentId: string;
+  teamName: string;
+  clubName: string;
+  clubShortCode: string;
+  clubLocation: string;
+  player1Name: string;
+  player1Nationality: string;
+  player1Ranking?: number;
+  player2Name: string;
+  player2Nationality: string;
+  player2Ranking?: number;
+  status: RegistrationStatus;
+  notes?: string;
+}
+
+export async function createTeamRegistration(input: CreateTeamRegistrationInput): Promise<Registration> {
+  const event = await getTournamentEvent(input.tournamentId);
+  const club = await upsertClub(input);
+  const player1 = await createPlayer(input.player1Name, club.id, input.player1Nationality, input.player1Ranking);
+  const player2 = await createPlayer(input.player2Name, club.id, input.player2Nationality, input.player2Ranking);
+  const team = await createTeam(input, event.id, club.id, player1.id, player2.id);
+  const profileId = await getCurrentProfileId();
+
+  const { data: registration, error } = await supabase
+    .from('registrations')
+    .insert({
+      tournament_event_id: event.id,
+      team_id: team.id,
+      submitted_by: profileId,
+      status: input.status,
+      validated_by: input.status === 'validated' ? profileId : null,
+      validated_at: input.status === 'validated' ? new Date().toISOString() : null,
+      notes: input.notes ?? null,
+    })
+    .select(`
+      id,
+      status,
+      rejection_reason,
+      validated_at,
+      submitted_at,
+      notes,
+      tournament_events!inner(tournament_id),
+      teams!inner(
+        id,
+        name,
+        club_id,
+        seed,
+        is_seed_locked,
+        ranking,
+        clubs!inner(name, short_code),
+        player1:players!teams_player1_id_fkey(id, full_name, avatar_url, club_id, national_ranking, nationality),
+        player2:players!teams_player2_id_fkey(id, full_name, avatar_url, club_id, national_ranking, nationality)
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  const created = toRegistration(registration as unknown as RegistrationRow);
+  await insertCreatedRegistrationAuditLog(created, profileId);
+  return created;
+}
+
+async function getTournamentEvent(tournamentId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from('tournament_events')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('No tournament event found for this tournament.');
+  }
+
+  return data;
+}
+
+async function upsertClub(input: CreateTeamRegistrationInput): Promise<{ id: string }> {
+  const shortCode = input.clubShortCode.trim().toUpperCase();
+
+  const { data, error } = await supabase
+    .from('clubs')
+    .upsert({
+      name: input.clubName.trim(),
+      short_code: shortCode,
+      location: input.clubLocation.trim() || 'Mauritius',
+    }, { onConflict: 'short_code' })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function createPlayer(
+  fullName: string,
+  clubId: string,
+  nationality: string,
+  ranking?: number,
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from('players')
+    .insert({
+      full_name: fullName.trim(),
+      club_id: clubId,
+      nationality: nationality.trim().toUpperCase() || 'MU',
+      national_ranking: ranking ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function createTeam(
+  input: CreateTeamRegistrationInput,
+  tournamentEventId: string,
+  clubId: string,
+  player1Id: string,
+  player2Id: string,
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from('teams')
+    .insert({
+      tournament_event_id: tournamentEventId,
+      name: input.teamName.trim(),
+      player1_id: player1Id,
+      player2_id: player2Id,
+      club_id: clubId,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 async function getCurrentProfileId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
@@ -186,6 +341,33 @@ async function insertRegistrationAuditLog(
       override_reason: status === 'rejected' ? reason ?? null : null,
       previous_state: { status: registration.status },
       new_state: { status },
+    });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function insertCreatedRegistrationAuditLog(registration: Registration, profileId: string | null) {
+  const { data: event } = await supabase
+    .from('tournament_events')
+    .select('id')
+    .eq('tournament_id', registration.tournamentId)
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from('audit_logs')
+    .insert({
+      tournament_event_id: event?.id ?? null,
+      action: 'REGISTRATION_CREATED',
+      module: 'Registrations',
+      entity_type: 'registration',
+      entity_id: registration.id,
+      description: `Registration created for ${registration.team.name}.`,
+      admin_id: profileId,
+      is_override: false,
+      new_state: { status: registration.status, team: registration.team.name },
     });
 
   if (error) {

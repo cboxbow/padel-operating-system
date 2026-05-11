@@ -42,7 +42,12 @@ export function useToast() {
 // ─── App State Context ────────────────────────────────────────────────────────
 import type { AppView, Tournament, Pool, Team } from './types';
 import { createTournament, fetchTournaments, type CreateTournamentInput } from './data/tournaments';
-import { fetchRegistrations, updateRegistrationStatus } from './data/registrations';
+import {
+  createTeamRegistration,
+  fetchRegistrations,
+  updateRegistrationStatus,
+  type CreateTeamRegistrationInput,
+} from './data/registrations';
 import { updateTeamSeed } from './data/teams';
 import { fetchPools, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
 import { fetchMatches, saveMatchScore, updateMatchSchedule } from './data/matches';
@@ -181,6 +186,7 @@ interface TournamentDataContextValue {
   matchesError: string | null;
   validateRegistration: (regId: string) => Promise<void>;
   rejectRegistration: (regId: string, reason: string) => Promise<void>;
+  addTeamRegistration: (input: CreateTeamRegistrationInput) => Promise<void>;
   refreshRegistrations: () => Promise<void>;
   updatePoolSlot: (poolId: string, position: number, team: Team | undefined) => Promise<void>;
   toggleSlotLock: (poolId: string, position: number) => Promise<void>;
@@ -207,6 +213,7 @@ const TournamentDataContext = createContext<TournamentDataContextValue>({
   matchesError: null,
   validateRegistration: async () => undefined,
   rejectRegistration: async () => undefined,
+  addTeamRegistration: async () => undefined,
   refreshRegistrations: async () => undefined,
   updatePoolSlot: async () => undefined,
   toggleSlotLock: async () => undefined,
@@ -338,6 +345,21 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
       adminId: 'adm1', adminName: 'Admin MPL', isOverride: false, overrideReason: reason,
     });
   }, [addAuditLog, registrations]);
+
+  const addTeamRegistration = useCallback(async (input: CreateTeamRegistrationInput) => {
+    const registration = await createTeamRegistration(input);
+    setRegistrations(prev => [registration, ...prev]);
+    addAuditLog({
+      action: 'REGISTRATION_CREATED',
+      module: 'Registrations',
+      entityType: 'registration',
+      entityId: registration.id,
+      description: `Registration created for ${registration.team.name}.`,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
+    });
+  }, [addAuditLog]);
 
   const updatePoolSlot = useCallback(async (poolId: string, position: number, team: Team | undefined) => {
     const pool = pools.find(p => p.id === poolId);
@@ -507,7 +529,7 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
   return (
     <TournamentDataContext.Provider value={{
       registrations, pools, standings, matches, auditLogs, overrides, registrationsError, poolsError, matchesError,
-      validateRegistration, rejectRegistration, refreshRegistrations, updatePoolSlot, toggleSlotLock,
+      validateRegistration, rejectRegistration, addTeamRegistration, refreshRegistrations, updatePoolSlot, toggleSlotLock,
       redrawPool, publishPool, updateSeed, completeMatchScore, scheduleMatch, refreshMatches,
       overrideStanding, addAuditLog, addOverride,
     }}>

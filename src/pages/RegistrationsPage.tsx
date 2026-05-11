@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, Search, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { CheckCircle, Plus, XCircle, Search, ChevronDown, ChevronUp, User } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, Modal, EmptyState } from '../components/UI';
@@ -10,7 +10,7 @@ type RegFilter = 'all' | RegistrationStatus;
 
 export function RegistrationsPage() {
   const { selectedTournament, navigate } = useAppState();
-  const { registrations, registrationsError, validateRegistration, rejectRegistration } = useTournamentData();
+  const { registrations, registrationsError, validateRegistration, rejectRegistration, addTeamRegistration } = useTournamentData();
   const { addToast } = useToast();
   const [filter, setFilter] = useState<RegFilter>('all');
   const [search, setSearch] = useState('');
@@ -18,6 +18,22 @@ export function RegistrationsPage() {
   const [rejectTarget, setRejectTarget] = useState<Registration | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [teamForm, setTeamForm] = useState({
+    teamName: '',
+    clubName: '',
+    clubShortCode: '',
+    clubLocation: 'Mauritius',
+    player1Name: '',
+    player1Nationality: 'MU',
+    player1Ranking: '',
+    player2Name: '',
+    player2Nationality: 'MU',
+    player2Ranking: '',
+    status: 'pending' as RegistrationStatus,
+    notes: '',
+  });
 
   const tournamentRegs = selectedTournament
     ? registrations.filter(r => r.tournamentId === selectedTournament.id)
@@ -76,12 +92,74 @@ export function RegistrationsPage() {
     }
   };
 
+  const handleCreateTeam = async () => {
+    if (!selectedTournament) {
+      addToast({ type: 'warning', title: 'Select Tournament', message: 'Open a tournament before adding a team.' });
+      return;
+    }
+
+    if (!teamForm.teamName.trim() || !teamForm.clubName.trim() || !teamForm.clubShortCode.trim() || !teamForm.player1Name.trim() || !teamForm.player2Name.trim()) {
+      addToast({ type: 'warning', title: 'Missing Fields', message: 'Team, club, and both player names are required.' });
+      return;
+    }
+
+    setIsCreatingTeam(true);
+    try {
+      await addTeamRegistration({
+        tournamentId: selectedTournament.id,
+        teamName: teamForm.teamName,
+        clubName: teamForm.clubName,
+        clubShortCode: teamForm.clubShortCode,
+        clubLocation: teamForm.clubLocation,
+        player1Name: teamForm.player1Name,
+        player1Nationality: teamForm.player1Nationality,
+        player1Ranking: teamForm.player1Ranking ? parseInt(teamForm.player1Ranking, 10) : undefined,
+        player2Name: teamForm.player2Name,
+        player2Nationality: teamForm.player2Nationality,
+        player2Ranking: teamForm.player2Ranking ? parseInt(teamForm.player2Ranking, 10) : undefined,
+        status: teamForm.status,
+        notes: teamForm.notes || undefined,
+      });
+      addToast({ type: 'success', title: 'Team Added', message: `${teamForm.teamName} registered.` });
+      setShowCreateTeam(false);
+      setTeamForm({
+        teamName: '',
+        clubName: '',
+        clubShortCode: '',
+        clubLocation: 'Mauritius',
+        player1Name: '',
+        player1Nationality: 'MU',
+        player1Ranking: '',
+        player2Name: '',
+        player2Nationality: 'MU',
+        player2Ranking: '',
+        status: 'pending',
+        notes: '',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Team Creation Failed',
+        message: error instanceof Error ? error.message : 'Unable to add team.',
+      });
+    } finally {
+      setIsCreatingTeam(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <TopBar
         title="Registrations"
         subtitle={selectedTournament?.name ?? 'All Tournaments'}
         leftAction={selectedTournament ? <BackButton onClick={() => navigate('tournament_detail', selectedTournament.id)} /> : undefined}
+        rightAction={
+          selectedTournament ? (
+            <button onClick={() => setShowCreateTeam(true)} className="btn-gold text-xs px-3 py-1.5 flex items-center gap-1.5">
+              <Plus size={13} /> Add Team
+            </button>
+          ) : undefined
+        }
       />
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-3 pb-24">
@@ -226,6 +304,155 @@ export function RegistrationsPage() {
         />
         <p className="text-xs text-mpl-gray mt-2">⚠️ Team will be notified and event logged.</p>
       </Modal>
+
+      <Modal
+        isOpen={showCreateTeam}
+        onClose={() => setShowCreateTeam(false)}
+        title="Add Team / Players"
+        size="lg"
+        footer={
+          <>
+            <button className="btn-ghost" onClick={() => setShowCreateTeam(false)}>Cancel</button>
+            <button className="btn-gold" onClick={() => void handleCreateTeam()} disabled={isCreatingTeam}>
+              {isCreatingTeam ? 'Adding...' : 'Add Team'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="section-title">Team Name</label>
+            <input
+              className="input-field"
+              placeholder="Boolell / Gokhool"
+              value={teamForm.teamName}
+              onChange={e => setTeamForm(prev => ({ ...prev, teamName: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Club</label>
+              <input
+                className="input-field"
+                placeholder="Padel Mauritius Club"
+                value={teamForm.clubName}
+                onChange={e => setTeamForm(prev => ({ ...prev, clubName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="section-title">Code</label>
+              <input
+                className="input-field uppercase"
+                placeholder="PMC"
+                value={teamForm.clubShortCode}
+                onChange={e => setTeamForm(prev => ({ ...prev, clubShortCode: e.target.value.toUpperCase() }))}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="section-title">Club Location</label>
+            <input
+              className="input-field"
+              value={teamForm.clubLocation}
+              onChange={e => setTeamForm(prev => ({ ...prev, clubLocation: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <PlayerFields
+              label="Player 1"
+              name={teamForm.player1Name}
+              nationality={teamForm.player1Nationality}
+              ranking={teamForm.player1Ranking}
+              onName={value => setTeamForm(prev => ({ ...prev, player1Name: value }))}
+              onNationality={value => setTeamForm(prev => ({ ...prev, player1Nationality: value }))}
+              onRanking={value => setTeamForm(prev => ({ ...prev, player1Ranking: value }))}
+            />
+            <PlayerFields
+              label="Player 2"
+              name={teamForm.player2Name}
+              nationality={teamForm.player2Nationality}
+              ranking={teamForm.player2Ranking}
+              onName={value => setTeamForm(prev => ({ ...prev, player2Name: value }))}
+              onNationality={value => setTeamForm(prev => ({ ...prev, player2Nationality: value }))}
+              onRanking={value => setTeamForm(prev => ({ ...prev, player2Ranking: value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="section-title">Status</label>
+              <select
+                className="input-field"
+                value={teamForm.status}
+                onChange={e => setTeamForm(prev => ({ ...prev, status: e.target.value as RegistrationStatus }))}
+              >
+                <option value="pending">Pending</option>
+                <option value="validated">Validated</option>
+                <option value="waitlisted">Waitlisted</option>
+              </select>
+            </div>
+            <div>
+              <label className="section-title">Notes</label>
+              <input
+                className="input-field"
+                value={teamForm.notes}
+                onChange={e => setTeamForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function PlayerFields({
+  label,
+  name,
+  nationality,
+  ranking,
+  onName,
+  onNationality,
+  onRanking,
+}: {
+  label: string;
+  name: string;
+  nationality: string;
+  ranking: string;
+  onName: (value: string) => void;
+  onNationality: (value: string) => void;
+  onRanking: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-mpl-border bg-mpl-dark p-3">
+      <p className="section-title">{label}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <input
+            className="input-field"
+            placeholder="Full name"
+            value={name}
+            onChange={e => onName(e.target.value)}
+          />
+        </div>
+        <input
+          className="input-field uppercase"
+          placeholder="MU"
+          value={nationality}
+          onChange={e => onNationality(e.target.value.toUpperCase())}
+        />
+        <input
+          type="number"
+          min={1}
+          className="input-field"
+          placeholder="Ranking"
+          value={ranking}
+          onChange={e => onRanking(e.target.value)}
+        />
+      </div>
     </div>
   );
 }
