@@ -118,7 +118,7 @@ export function DrawRoomPage() {
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
 export function PoolDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
-  const { pools, poolsError, registrations, generatePools, resetPools, redrawPool, publishPool, addSlotToPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
+  const { pools, poolsError, registrations, matches, generatePools, resetPools, redrawPool, publishPool, generatePoolMatches, addSlotToPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
   const { addToast } = useToast();
 
   const [selectedPool, setSelectedPool] = useState<string>('');
@@ -131,6 +131,9 @@ export function PoolDrawPage() {
 
   const tournamentPools = pools.filter(p => p.tournamentId === selectedTournament?.id);
   const pool = tournamentPools.find(p => p.id === selectedPool);
+  const tournamentPoolMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
+  const allPoolsPublished = tournamentPools.length > 0 && tournamentPools.every(p => p.status === 'published' || p.status === 'locked');
+  const canGeneratePoolMatches = allPoolsPublished && tournamentPoolMatches.length === 0;
 
   useEffect(() => {
     if (tournamentPools.length > 0 && !tournamentPools.some(p => p.id === selectedPool)) {
@@ -204,6 +207,26 @@ export function PoolDrawPage() {
         type: 'error',
         title: 'Publish Failed',
         message: error instanceof Error ? error.message : 'Unable to publish pool.',
+      });
+    }
+  };
+
+  const handleGeneratePoolMatches = async () => {
+    if (!selectedTournament) return;
+
+    try {
+      await generatePoolMatches(selectedTournament.id);
+      await setTournamentStatus(selectedTournament.id, 'matches_ongoing');
+      addToast({
+        type: 'success',
+        title: 'Pool Matches Generated',
+        message: 'Pool matches are now available in Match Schedule and Match Scores.',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Match Generation Failed',
+        message: error instanceof Error ? error.message : 'Unable to generate pool matches.',
       });
     }
   };
@@ -491,9 +514,25 @@ export function PoolDrawPage() {
               )}
 
               {pool.status === 'published' && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3">
-                  <CheckCircle size={14} className="text-green-400" />
-                  <p className="text-xs text-green-400 font-semibold">This pool draw is officially published and visible to players.</p>
+                <div className="space-y-2">
+                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3">
+                    <CheckCircle size={14} className="text-green-400" />
+                    <p className="text-xs text-green-400 font-semibold">This pool draw is officially published and visible to players.</p>
+                  </div>
+                  {canGeneratePoolMatches && (
+                    <button
+                      className="w-full btn-gold flex items-center justify-center gap-2"
+                      onClick={() => void handleGeneratePoolMatches()}
+                    >
+                      <Shuffle size={14} /> Generate Pool Matches
+                    </button>
+                  )}
+                  {tournamentPoolMatches.length > 0 && (
+                    <div className="rounded-xl border border-mpl-border bg-mpl-dark px-3 py-2">
+                      <p className="text-xs font-semibold text-white">{tournamentPoolMatches.length} pool matches generated</p>
+                      <p className="text-[11px] text-mpl-gray mt-0.5">Open Match Schedule or Match Scores to continue.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
