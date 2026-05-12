@@ -244,15 +244,7 @@ export function MainDrawPage() {
 
     setSlots(prev => prev.map(slot => (
       slot.id === slotToClear.id
-        ? {
-            ...slot,
-            team: undefined,
-            placeholder: undefined,
-            candidateTeam: undefined,
-            source: 'empty',
-            isBye: false,
-            isLocked: false,
-          }
+        ? clearEditableSlot(slot)
         : slot
     )));
     addAuditLog({
@@ -273,12 +265,13 @@ export function MainDrawPage() {
     if (!swapTarget) return;
     setSlots(prev => prev.map(s => {
       if (s.id !== swapTarget.id) return s;
+      if (team === null) return clearEditableSlot(s);
+
       return {
         ...s,
-        team: team === 'bye' || team === null ? undefined : team,
-        placeholder: team === 'bye' ? 'BYE' : team === null ? undefined : s.placeholder,
-        candidateTeam: team === 'bye' || team === null ? undefined : s.candidateTeam,
-        source: team === null ? 'empty' : s.source,
+        team: team === 'bye' ? undefined : team,
+        placeholder: team === 'bye' ? 'BYE' : s.placeholder,
+        candidateTeam: team === 'bye' ? undefined : s.candidateTeam,
         isBye: team === 'bye',
       };
     }));
@@ -480,6 +473,12 @@ export function MainDrawPage() {
               <button onClick={() => setShowSwapPicker(false)} className="text-mpl-gray text-lg">x</button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {swapTarget?.source === 'qualifier' && swapTarget.placeholder && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+                  <p className="text-xs font-bold text-cyan-300">{swapTarget.placeholder}</p>
+                  <p className="text-[11px] text-mpl-gray">Use Auto Fill Qualif or choose the qualified team manually.</p>
+                </div>
+              )}
               <button
                 className="w-full p-3 rounded-xl border border-dashed border-yellow-500/40 text-yellow-400 text-sm font-semibold hover:bg-yellow-500/10 transition-colors"
                 onClick={() => handleSwapTeam('bye')}
@@ -890,6 +889,27 @@ function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSl
     source: source.source === 'advance' ? target.source : source.source,
     isBye: source.isBye,
     isLocked: source.isLocked,
+  };
+}
+
+function clearEditableSlot(slot: MainDrawSlot): MainDrawSlot {
+  if (slot.source === 'qualifier' || slot.source === 'team') {
+    return {
+      ...slot,
+      team: undefined,
+      isBye: false,
+      isLocked: false,
+    };
+  }
+
+  return {
+    ...slot,
+    team: undefined,
+    placeholder: undefined,
+    candidateTeam: undefined,
+    source: 'empty',
+    isBye: false,
+    isLocked: false,
   };
 }
 
