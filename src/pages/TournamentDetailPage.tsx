@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import {
   Users, ClipboardList, Star, GitBranch, Trophy,
-  Lock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe, Play
+  Lock, Unlock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe, Play
 } from 'lucide-react';
 import { useAppState, useToast, useTournamentData } from '../context';
 import {
   TopBar, WorkflowStepper
 } from '../components/Navigation';
-import { BackButton, GoldDivider, StatCard } from '../components/UI';
+import { BackButton, ConfirmDialog, GoldDivider, StatCard } from '../components/UI';
 import { tournamentStatusClass, getTournamentStatusLabel, formatDate } from '../lib';
 import type { CompetitionMode, TournamentStatus } from '../types';
 import { cn } from '../lib';
+import { unlockMainDraw } from '../data/mainDraw';
 
 const WORKFLOW_STEPS: { label: string; statuses: TournamentStatus[] }[] = [
   { label: 'Reg. Open', statuses: ['registration_open'] },
@@ -49,6 +51,7 @@ export function TournamentDetailPage() {
   const { selectedTournament, navigate, setTournamentMode, setTournamentPoolCount, setTournamentQualifiersPerPool, setTournamentStatus } = useAppState();
   const { registrations, pools, matches, generatePools, generatePoolMatches } = useTournamentData();
   const { addToast } = useToast();
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
 
   if (!selectedTournament) return null;
   const t = selectedTournament;
@@ -276,6 +279,26 @@ export function TournamentDetailPage() {
     }
   };
 
+  const handleUnlockDraw = async () => {
+    try {
+      await unlockMainDraw(t.id);
+      await setTournamentStatus(t.id, 'main_draw_ready');
+      addToast({
+        type: 'success',
+        title: 'Draw Unlocked',
+        message: 'Main Draw is editable again. Publish it again when ready for public view.',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Unlock Failed',
+        message: error instanceof Error ? error.message : 'Unable to unlock this draw.',
+      });
+    } finally {
+      setShowUnlockConfirm(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <TopBar
@@ -425,14 +448,29 @@ export function TournamentDetailPage() {
           {isLocked && (
             <div className="mx-4 mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center gap-3">
               <Lock size={16} className="text-red-400 flex-shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-semibold text-red-400">Draw Locked</p>
-                <p className="text-xs text-mpl-gray mt-0.5">This tournament's draw is locked and cannot be modified. Contact a super admin to unlock.</p>
+                <p className="text-xs text-mpl-gray mt-0.5">This tournament's draw is locked and cannot be modified until it is reopened.</p>
               </div>
+              <button
+                className="btn-ghost flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-mpl-gold border-mpl-gold/30"
+                onClick={() => setShowUnlockConfirm(true)}
+              >
+                <Unlock size={12} /> Unlock
+              </button>
             </div>
           )}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={showUnlockConfirm}
+        onClose={() => setShowUnlockConfirm(false)}
+        onConfirm={() => void handleUnlockDraw()}
+        title="Unlock Draw?"
+        message="This will reopen the main draw for editing and hide the public bracket until you publish it again."
+        confirmLabel="Unlock Draw"
+        variant="gold"
+      />
     </div>
   );
 }

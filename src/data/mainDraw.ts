@@ -49,6 +49,17 @@ export interface PersistedMainDrawWithTeams {
 }
 
 export async function fetchPublishedMainDraw(tournamentId: string): Promise<PersistedMainDraw | null> {
+  return fetchMainDrawByStatus(tournamentId, ['published', 'locked']);
+}
+
+export async function fetchAdminMainDraw(tournamentId: string): Promise<PersistedMainDraw | null> {
+  return fetchMainDrawByStatus(tournamentId, ['draft', 'published', 'locked']);
+}
+
+async function fetchMainDrawByStatus(
+  tournamentId: string,
+  statuses: Array<'draft' | 'published' | 'locked'>,
+): Promise<PersistedMainDraw | null> {
   const event = await fetchTournamentEvent(tournamentId);
   if (!event) return null;
 
@@ -61,7 +72,7 @@ export async function fetchPublishedMainDraw(tournamentId: string): Promise<Pers
     `)
     .eq('tournament_event_id', event.id)
     .eq('draw_type', 'main_draw')
-    .in('status', ['published', 'locked'])
+    .in('status', statuses)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -201,6 +212,45 @@ export async function publishMainDraw(
   const { error: eventError } = await supabase
     .from('tournament_events')
     .update({ status: 'main_draw_published' })
+    .eq('id', event.id);
+  if (eventError) throw eventError;
+}
+
+export async function unlockMainDraw(tournamentId: string): Promise<void> {
+  const event = await fetchTournamentEvent(tournamentId);
+  if (!event) throw new Error('No tournament event found for this tournament.');
+
+  const { error: sessionError } = await supabase
+    .from('draw_sessions')
+    .update({
+      status: 'draft',
+      locked_by: null,
+      locked_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('tournament_event_id', event.id)
+    .eq('draw_type', 'main_draw');
+  if (sessionError) throw sessionError;
+
+  const { error: drawError } = await supabase
+    .from('draws')
+    .update({
+      status: 'draft',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('tournament_event_id', event.id)
+    .eq('draw_type', 'main_draw');
+  if (drawError) throw drawError;
+
+  const { error: tournamentError } = await supabase
+    .from('tournaments')
+    .update({ status: 'main_draw_ready' })
+    .eq('id', tournamentId);
+  if (tournamentError) throw tournamentError;
+
+  const { error: eventError } = await supabase
+    .from('tournament_events')
+    .update({ status: 'main_draw_ready' })
     .eq('id', event.id);
   if (eventError) throw eventError;
 }

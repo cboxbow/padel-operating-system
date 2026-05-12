@@ -6,7 +6,7 @@ import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import { fetchPublishedMainDraw, publishMainDraw, type PersistedMainDrawMatch, type PersistedMainDrawSlot } from '../data/mainDraw';
+import { fetchAdminMainDraw, publishMainDraw, unlockMainDraw, type PersistedMainDrawMatch, type PersistedMainDrawSlot } from '../data/mainDraw';
 import type { DrawSlot, MatchSet, Pool, Registration, ScheduledMatch, Team } from '../types';
 
 type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER';
@@ -73,6 +73,7 @@ export function MainDrawPage() {
   const [drawStatus, setDrawStatus] = useState<'draft' | 'published' | 'locked'>('draft');
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
   const [swapTarget, setSwapTarget] = useState<MainDrawSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function MainDrawPage() {
       if (!selectedTournament) return;
 
       try {
-        const savedDraw = await fetchPublishedMainDraw(selectedTournament.id);
+        const savedDraw = await fetchAdminMainDraw(selectedTournament.id);
         if (cancelled) return;
 
         if (savedDraw && savedDraw.slots.length > 0) {
@@ -420,6 +421,36 @@ export function MainDrawPage() {
     setShowLockConfirm(false);
   };
 
+  const handleUnlock = async () => {
+    if (!selectedTournament) return;
+
+    try {
+      await unlockMainDraw(selectedTournament.id);
+      await setTournamentStatus(selectedTournament.id, 'main_draw_ready');
+      setDrawStatus('draft');
+      addAuditLog({
+        action: 'MAIN_DRAW_UNLOCKED',
+        module: 'Main Draw',
+        entityType: 'draw',
+        entityId: 'main-draw-local',
+        description: 'Main draw unlocked by Admin MPL for editing.',
+        adminId: 'adm1',
+        adminName: 'Admin MPL',
+        isOverride: true,
+        overrideReason: 'Admin unlock requested.',
+      });
+      addToast({ type: 'success', title: 'Main Draw Unlocked', message: 'Editing is available again. Republish when ready.' });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Unlock Failed',
+        message: error instanceof Error ? error.message : 'Unable to unlock main draw.',
+      });
+    } finally {
+      setShowUnlockConfirm(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <TopBar
@@ -508,8 +539,14 @@ export function MainDrawPage() {
 
           {drawStatus === 'locked' && (
             <div className="mx-4 mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
-              <Lock size={14} className="text-red-400" />
-              <p className="text-xs text-red-400 font-semibold">Main draw is locked. No further edits allowed.</p>
+              <Lock size={14} className="text-red-400 flex-shrink-0" />
+              <p className="flex-1 text-xs text-red-400 font-semibold">Main draw is locked. Unlock it to edit and republish.</p>
+              <button
+                className="btn-ghost flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-mpl-gold border-mpl-gold/30"
+                onClick={() => setShowUnlockConfirm(true)}
+              >
+                <Unlock size={12} /> Unlock
+              </button>
             </div>
           )}
 
@@ -641,6 +678,15 @@ export function MainDrawPage() {
         message="Locking the main draw will prevent any further edits. This is typically done after the tournament is complete. Only a super admin can unlock."
         confirmLabel="Lock Draw"
         variant="danger"
+      />
+      <ConfirmDialog
+        isOpen={showUnlockConfirm}
+        onClose={() => setShowUnlockConfirm(false)}
+        onConfirm={() => void handleUnlock()}
+        title="Unlock Main Draw?"
+        message="This will reopen the saved draw for editing and hide it from the public view until you publish it again."
+        confirmLabel="Unlock Draw"
+        variant="gold"
       />
     </div>
   );
