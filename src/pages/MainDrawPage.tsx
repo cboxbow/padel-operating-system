@@ -12,6 +12,7 @@ type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER
 type MainDrawSlot = DrawSlot & {
   entryRound: DrawRoundName;
   placeholder?: string;
+  candidateTeam?: Team;
   source?: 'team' | 'qualifier' | 'empty' | 'advance';
 };
 
@@ -42,6 +43,18 @@ export function MainDrawPage() {
   const validatedTeams = useMemo(() => (
     tournamentRegistrations
       .map(r => r.team)
+      .sort(sortTeamsForDraw)
+  ), [tournamentRegistrations]);
+  const directTeams = useMemo(() => (
+    tournamentRegistrations
+      .filter(reg => getDrawEntry(reg.notes) !== 'QUALIF')
+      .map(reg => reg.team)
+      .sort(sortTeamsForDraw)
+  ), [tournamentRegistrations]);
+  const poolTeams = useMemo(() => (
+    tournamentRegistrations
+      .filter(reg => getDrawEntry(reg.notes) === 'QUALIF')
+      .map(reg => reg.team)
       .sort(sortTeamsForDraw)
   ), [tournamentRegistrations]);
 
@@ -80,24 +93,43 @@ export function MainDrawPage() {
   const filledSlots = editableSlots.filter(s => s.team || s.isBye || s.placeholder).length;
   const byeCount = editableSlots.filter(s => s.isBye).length;
   const lockedSlots = editableSlots.filter(s => s.isLocked).length;
-  const directTeams = editableSlots.filter(s => s.source === 'team').length;
+  const directSlotCount = editableSlots.filter(s => s.source === 'team').length;
   const qualifierSlots = editableSlots.filter(s => s.source === 'qualifier').length;
+  const pickerTeams = swapTarget?.source === 'qualifier' ? poolTeams : directTeams;
+
+  const handleAutoFillDirect = () => {
+    setSlots(prev => {
+      const usedTeamIds = new Set(prev.map(slot => slot.team?.id).filter(Boolean));
+      return prev.map(slot => {
+        if (slot.source !== 'team' || slot.team || !slot.candidateTeam || usedTeamIds.has(slot.candidateTeam.id)) {
+          return slot;
+        }
+        usedTeamIds.add(slot.candidateTeam.id);
+        return {
+          ...slot,
+          team: slot.candidateTeam,
+          isBye: false,
+          isLocked: Boolean(slot.candidateTeam.seed),
+        };
+      });
+    });
+    addToast({ type: 'success', title: 'Direct Slots Filled', message: 'Seeded/direct teams placed into their main draw slots.' });
+  };
 
   const handleRandomDraw = () => {
     const lockedTeamIds = new Set(slots.filter(slot => slot.isLocked && slot.team).map(slot => slot.team!.id));
-    const shuffled = [...validatedTeams]
+    const shuffled = [...directTeams]
       .filter(team => !lockedTeamIds.has(team.id))
       .sort(() => Math.random() - 0.5);
 
     let teamIdx = 0;
     setSlots(prev => prev.map(slot => {
-      if (slot.isLocked || slot.source === 'advance') return slot;
+      if (slot.isLocked || slot.source !== 'team') return slot;
       const team = shuffled[teamIdx++];
       return {
         ...slot,
         team,
-        placeholder: team ? undefined : slot.placeholder,
-        isBye: !team && slot.source === 'empty',
+        isBye: false,
       };
     }));
     addAuditLog({
@@ -184,8 +216,6 @@ export function MainDrawPage() {
         ? {
             ...slot,
             team: undefined,
-            placeholder: undefined,
-            source: 'empty',
             isBye: false,
             isLocked: false,
           }
@@ -212,8 +242,6 @@ export function MainDrawPage() {
       return {
         ...s,
         team: team === 'bye' || team === null ? undefined : team,
-        placeholder: undefined,
-        source: team === null ? 'empty' : s.source,
         isBye: team === 'bye',
       };
     }));
@@ -292,7 +320,7 @@ export function MainDrawPage() {
           <div className="grid grid-cols-4 gap-2 px-4 pt-4">
             {[
               { label: 'Slots', value: totalSlots },
-              { label: 'Direct', value: directTeams },
+              { label: 'Direct', value: directSlotCount },
               { label: 'Qualif', value: qualifierSlots },
               { label: 'Locked', value: lockedSlots },
             ].map(s => (
@@ -312,9 +340,14 @@ export function MainDrawPage() {
           {drawStatus === 'draft' && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
+                <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAutoFillDirect}>
+                  <Shuffle size={13} /> Auto Fill Direct
+                </button>
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleRandomDraw}>
                   <Shuffle size={13} /> Random Draw
                 </button>
+              </div>
+              <div className="flex gap-2">
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAddMainSlot}>
                   <Plus size={13} /> Add Slot
                 </button>
@@ -406,7 +439,7 @@ export function MainDrawPage() {
               >
                 Clear Slot
               </button>
-              {validatedTeams.map(team => (
+              {pickerTeams.map(team => (
                 <button
                   key={team.id}
                   onClick={() => handleSwapTeam(team)}
@@ -471,7 +504,14 @@ function buildMainDrawSlots(
 
   directRegistrations.forEach(reg => {
     const entryRound = normalizeDrawEntry(getDrawEntry(reg.notes)) ?? earliestRound;
-    slots.push(createEntrySlot(entryRound, nextPosition(roundPositions, entryRound), reg.team, 'team'));
+    slots.push(createEntrySlot(
+      entryRound,
+      nextPosition(roundPositions, entryRound),
+      undefined,
+      'team',
+      buildDirectSlotLabel(reg.team, entryRound),
+      reg.team,
+    ));
   });
 
   if (competitionMode === 'qualification_phase' && pools.length > 0) {
@@ -494,7 +534,14 @@ function buildMainDrawSlots(
       .map(reg => reg.team)
       .sort(sortTeamsForDraw)
       .forEach(team => {
-        slots.push(createEntrySlot(earliestRound, nextPosition(roundPositions, earliestRound), team, 'team'));
+        slots.push(createEntrySlot(
+          earliestRound,
+          nextPosition(roundPositions, earliestRound),
+          undefined,
+          'team',
+          buildDirectSlotLabel(team, earliestRound),
+          team,
+        ));
       });
   }
 
@@ -503,6 +550,12 @@ function buildMainDrawSlots(
 
 function normalizeQualifiersPerPool(value: number): number {
   return Math.max(1, Math.min(4, Math.floor(value) || 2));
+}
+
+function buildDirectSlotLabel(team: Team, entryRound: DrawRoundName): string {
+  if (team.seed) return `Seed #${team.seed}`;
+  if (team.ranking) return `Direct ${entryRound} · W${team.ranking}`;
+  return `Direct ${entryRound}`;
 }
 
 function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
@@ -597,6 +650,7 @@ function createEntrySlot(
   team: Team | undefined,
   source: MainDrawSlot['source'],
   placeholder?: string,
+  candidateTeam?: Team,
 ): MainDrawSlot {
   return {
     id: `main-${entryRound.replace('/', '')}-${source}-${position}`,
@@ -606,6 +660,7 @@ function createEntrySlot(
     entryRound,
     team,
     placeholder,
+    candidateTeam,
     source,
     isBye: false,
     isLocked: Boolean(team?.seed),
@@ -676,6 +731,7 @@ function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSl
     ...target,
     team: source.team,
     placeholder: source.placeholder,
+    candidateTeam: source.candidateTeam,
     source: source.source === 'advance' ? target.source : source.source,
     isBye: source.isBye,
     isLocked: source.isLocked,
