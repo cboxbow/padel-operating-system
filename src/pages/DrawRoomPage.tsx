@@ -250,6 +250,32 @@ export function PoolDrawPage() {
     }
   };
 
+  const handlePoolSlotClear = async (slot: PoolSlot) => {
+    if (!pool || pool.status !== 'draft' || slot.isEmpty) return;
+
+    try {
+      await updatePoolSlot(pool.id, slot.position, undefined);
+      addAuditLog({
+        action: 'POOL_SLOT_CLEARED',
+        module: 'Pool Draw',
+        entityType: 'pool_slot',
+        entityId: slot.id,
+        description: `${pool.name}: slot ${slot.position} cleared by double click.`,
+        adminId: 'adm1',
+        adminName: 'Admin MPL',
+        isOverride: true,
+        overrideReason: 'Manual double-click slot clear.',
+      });
+      addToast({ type: 'info', title: 'Slot Cleared', message: `${pool.name} slot ${slot.position} is now empty.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Clear Failed',
+        message: error instanceof Error ? error.message : 'Unable to clear pool slot.',
+      });
+    }
+  };
+
   const handleSwapWithTeam = (team: Team | null) => {
     if (!slotToSwap || !pool) return;
     const prev = slotToSwap.team?.name ?? 'Empty';
@@ -358,6 +384,7 @@ export function PoolDrawPage() {
                         event.preventDefault();
                         void handlePoolSlotDrop(slot);
                       }}
+                      onDoubleClick={() => void handlePoolSlotClear(slot)}
                       onDragEnd={() => setDraggedSlotPosition(null)}
                       className={cn(
                         'rounded-xl border transition-all duration-200',

@@ -164,6 +164,35 @@ export function MainDrawPage() {
     setDraggedSlotId(null);
   };
 
+  const handleDrawSlotClear = (slotToClear: MainDrawSlot) => {
+    if (drawStatus !== 'draft' || slotToClear.source === 'advance') return;
+
+    setSlots(prev => prev.map(slot => (
+      slot.id === slotToClear.id
+        ? {
+            ...slot,
+            team: undefined,
+            placeholder: undefined,
+            source: 'empty',
+            isBye: false,
+            isLocked: false,
+          }
+        : slot
+    )));
+    addAuditLog({
+      action: 'MAIN_DRAW_SLOT_CLEARED',
+      module: 'Main Draw',
+      entityType: 'draw_slot',
+      entityId: slotToClear.id,
+      description: `Main draw ${slotToClear.entryRound} slot ${slotToClear.position} cleared by double click.`,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: true,
+      overrideReason: 'Manual double-click slot clear.',
+    });
+    addToast({ type: 'info', title: 'Slot Cleared', message: `${slotToClear.entryRound} slot ${slotToClear.position} is now empty.` });
+  };
+
   const handleSwapTeam = (team: Team | 'bye' | null) => {
     if (!swapTarget) return;
     setSlots(prev => prev.map(s => {
@@ -327,6 +356,7 @@ export function MainDrawPage() {
                           onToggleLock={() => handleToggleLock(slot.id)}
                           onDragStart={() => setDraggedSlotId(slot.id)}
                           onDrop={() => handleDrawSlotDrop(slot)}
+                          onClear={() => handleDrawSlotClear(slot)}
                           onDragEnd={() => setDraggedSlotId(null)}
                           isDragging={draggedSlotId === slot.id}
                           isDraft={drawStatus === 'draft'}
@@ -558,7 +588,7 @@ function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSl
 }
 
 function DrawSlotRow({
-  slot, isLocked: drawLocked, onSwap, onToggleLock, onDragStart, onDrop, onDragEnd, isDragging, isDraft
+  slot, isLocked: drawLocked, onSwap, onToggleLock, onDragStart, onDrop, onClear, onDragEnd, isDragging, isDraft
 }: {
   slot: MainDrawSlot;
   isLocked: boolean;
@@ -566,6 +596,7 @@ function DrawSlotRow({
   onToggleLock: () => void;
   onDragStart: () => void;
   onDrop: () => void;
+  onClear: () => void;
   onDragEnd: () => void;
   isDragging: boolean;
   isDraft: boolean;
@@ -596,6 +627,9 @@ function DrawSlotRow({
       onDrop={(event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         onDrop();
+      }}
+      onDoubleClick={() => {
+        if (canDrag) onClear();
       }}
       onDragEnd={onDragEnd}
     >
