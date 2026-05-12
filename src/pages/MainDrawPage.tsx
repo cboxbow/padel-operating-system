@@ -15,10 +15,16 @@ type MainDrawSlot = DrawSlot & {
   source?: 'team' | 'qualifier' | 'empty' | 'advance';
 };
 
-interface DrawColumn {
+interface BracketRound {
   name: DrawRoundName;
-  entries: MainDrawSlot[];
-  advances: MainDrawSlot[];
+  matches: BracketMatch[];
+}
+
+interface BracketMatch {
+  id: string;
+  roundName: DrawRoundName;
+  matchNumber: number;
+  slots: MainDrawSlot[];
 }
 
 const ROUND_ORDER: DrawRoundName[] = ['1/32', '1/16', '1/8', '1/4', '1/2', 'FINAL', 'WINNER'];
@@ -67,7 +73,7 @@ export function MainDrawPage() {
     setDrawStatus('draft');
   }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, teamSignature, poolSignature]);
 
-  const columns = useMemo(() => buildDrawColumns(slots), [slots]);
+  const bracketRounds = useMemo(() => buildBracketRounds(slots), [slots]);
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
   const totalSlots = editableSlots.length;
   const filledSlots = editableSlots.filter(s => s.team || s.isBye || s.placeholder).length;
@@ -340,31 +346,33 @@ export function MainDrawPage() {
 
           <div className="px-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="section-title">Excel Style Main Draw</p>
+              <p className="section-title">Main Draw Bracket</p>
               <p className="text-[10px] text-mpl-gray">{byeCount} BYEs</p>
             </div>
             <div className="overflow-x-auto no-scrollbar pb-2">
-              <div className="flex gap-3 min-w-max">
-                {columns.map(column => (
-                  <div key={column.name} className="w-48 flex-shrink-0">
+              <div className="flex gap-5 min-w-max items-start">
+                {bracketRounds.map((round, roundIndex) => (
+                  <div key={round.name} className="w-56 flex-shrink-0">
                     <div className="sticky top-0 z-10 bg-mpl-black pb-2">
-                      <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{column.name}</p>
-                      <p className="text-[10px] text-mpl-gray">{column.entries.length + column.advances.length} bracket lines</p>
+                      <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{round.name}</p>
+                      <p className="text-[10px] text-mpl-gray">{round.matches.length} matches</p>
                     </div>
-                    <div className="space-y-2">
-                      {[...column.entries, ...column.advances].map(slot => (
-                        <DrawSlotRow
-                          key={slot.id}
-                          slot={slot}
-                          isLocked={drawStatus === 'locked'}
-                          onSwap={() => handleSlotSwap(slot)}
-                          onToggleLock={() => handleToggleLock(slot.id)}
-                          onDragStart={() => setDraggedSlotId(slot.id)}
-                          onDrop={() => handleDrawSlotDrop(slot)}
-                          onClear={() => handleDrawSlotClear(slot)}
-                          onDragEnd={() => setDraggedSlotId(null)}
-                          isDragging={draggedSlotId === slot.id}
+                    <div>
+                      {round.matches.map(match => (
+                        <BracketMatchCard
+                          key={match.id}
+                          match={match}
+                          roundIndex={roundIndex}
+                          isLastRound={roundIndex === bracketRounds.length - 1}
+                          drawLocked={drawStatus === 'locked'}
                           isDraft={drawStatus === 'draft'}
+                          draggedSlotId={draggedSlotId}
+                          onSlotSwap={handleSlotSwap}
+                          onToggleLock={handleToggleLock}
+                          onDragStart={setDraggedSlotId}
+                          onDrop={handleDrawSlotDrop}
+                          onClear={handleDrawSlotClear}
+                          onDragEnd={() => setDraggedSlotId(null)}
                         />
                       ))}
                     </div>
@@ -496,20 +504,90 @@ function normalizeQualifiersPerPool(value: number): number {
   return Math.max(1, Math.min(4, Math.floor(value) || 2));
 }
 
-function buildDrawColumns(slots: MainDrawSlot[]): DrawColumn[] {
+function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
   if (slots.length === 0) return [];
 
   const earliestIndex = Math.min(...slots.map(slot => ROUND_ORDER.indexOf(slot.entryRound)));
   const names = ROUND_ORDER.slice(Math.max(0, earliestIndex));
-  let previousLineCount = 0;
+  const rounds: BracketRound[] = [];
+  let carriedWinners: MainDrawSlot[] = [];
 
-  return names.map((name, columnIndex) => {
-    const entries = slots.filter(slot => slot.entryRound === name).sort((a, b) => a.position - b.position);
-    const advanceCount = columnIndex === 0 ? 0 : Math.max(1, Math.ceil(previousLineCount / 2));
-    const advances = Array.from({ length: advanceCount }, (_, index) => createAdvanceSlot(name, index + 1));
-    previousLineCount = entries.length + advances.length;
-    return { name, entries, advances };
+  names.forEach((name, roundIndex) => {
+    const entrySlots = slots
+      .filter(slot => slot.entryRound === name)
+      .sort((a, b) => a.position - b.position);
+
+    if (name === 'WINNER') {
+      const winnerSlot = createAdvanceSlot(name, 1, 'Tournament Winner');
+      rounds.push({
+        name,
+        matches: [{
+          id: `${name}-match-1`,
+          roundName: name,
+          matchNumber: 1,
+          slots: [winnerSlot],
+        }],
+      });
+      return;
+    }
+
+    const participants = roundIndex === 0
+      ? entrySlots
+      : weaveRoundParticipants(entrySlots, carriedWinners);
+    const matches = chunkSlots(participants, 2).map((matchSlots, index) => ({
+      id: `${name}-match-${index + 1}`,
+      roundName: name,
+      matchNumber: index + 1,
+      slots: ensureMatchPair(matchSlots, name, index + 1),
+    }));
+
+    rounds.push({
+      name,
+      matches,
+    });
+
+    carriedWinners = matches.map((match, index) => createAdvanceSlot(nextRoundName(name), index + 1, `Winner ${name} M${match.matchNumber}`));
   });
+
+  return rounds;
+}
+
+function weaveRoundParticipants(entries: MainDrawSlot[], winners: MainDrawSlot[]): MainDrawSlot[] {
+  const maxLength = Math.max(entries.length, winners.length);
+  const participants: MainDrawSlot[] = [];
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (entries[index]) participants.push(entries[index]);
+    if (winners[index]) participants.push(winners[index]);
+  }
+
+  return participants;
+}
+
+function chunkSlots(slots: MainDrawSlot[], size: number): MainDrawSlot[][] {
+  const chunks: MainDrawSlot[][] = [];
+  for (let index = 0; index < slots.length; index += size) {
+    chunks.push(slots.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function ensureMatchPair(slots: MainDrawSlot[], roundName: DrawRoundName, matchNumber: number): MainDrawSlot[] {
+  if (slots.length >= 2) return slots;
+
+  return [
+    ...slots,
+    {
+      id: `display-empty-${roundName.replace('/', '')}-${matchNumber}`,
+      drawId: 'main-draw-local',
+      round: ROUND_ORDER.indexOf(roundName) + 1,
+      position: matchNumber * 2,
+      entryRound: roundName,
+      source: 'empty',
+      isBye: false,
+      isLocked: false,
+    },
+  ];
 }
 
 function createEntrySlot(
@@ -533,18 +611,23 @@ function createEntrySlot(
   };
 }
 
-function createAdvanceSlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
+function createAdvanceSlot(entryRound: DrawRoundName, position: number, placeholder?: string): MainDrawSlot {
   return {
     id: `advance-${entryRound.replace('/', '')}-${position}`,
     drawId: 'main-draw-local',
     round: ROUND_ORDER.indexOf(entryRound) + 1,
     position,
     entryRound,
-    placeholder: entryRound === 'WINNER' ? 'Winner' : `Winner Match ${position}`,
+    placeholder: placeholder ?? (entryRound === 'WINNER' ? 'Winner' : `Winner Match ${position}`),
     source: 'advance',
     isBye: false,
     isLocked: true,
   };
+}
+
+function nextRoundName(roundName: DrawRoundName): DrawRoundName {
+  const index = ROUND_ORDER.indexOf(roundName);
+  return ROUND_ORDER[Math.min(ROUND_ORDER.length - 1, index + 1)];
 }
 
 function nextPosition(positions: Map<DrawRoundName, number>, round: DrawRoundName): number {
@@ -598,6 +681,73 @@ function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSl
   };
 }
 
+function BracketMatchCard({
+  match,
+  roundIndex,
+  isLastRound,
+  drawLocked,
+  isDraft,
+  draggedSlotId,
+  onSlotSwap,
+  onToggleLock,
+  onDragStart,
+  onDrop,
+  onClear,
+  onDragEnd,
+}: {
+  match: BracketMatch;
+  roundIndex: number;
+  isLastRound: boolean;
+  drawLocked: boolean;
+  isDraft: boolean;
+  draggedSlotId: string | null;
+  onSlotSwap: (slot: MainDrawSlot) => void;
+  onToggleLock: (slotId: string) => void;
+  onDragStart: (slotId: string) => void;
+  onDrop: (slot: MainDrawSlot) => void;
+  onClear: (slot: MainDrawSlot) => void;
+  onDragEnd: () => void;
+}) {
+  const matchBandHeight = 142 * Math.pow(2, roundIndex);
+
+  return (
+    <div
+      className="relative flex items-center"
+      style={{ height: matchBandHeight }}
+    >
+      {roundIndex > 0 && (
+        <div className="absolute left-[-20px] top-1/2 h-px w-5 bg-mpl-gold/30" />
+      )}
+      {!isLastRound && (
+        <div className="absolute right-[-20px] top-1/2 h-px w-5 bg-mpl-gold/30" />
+      )}
+      <div className="w-full mpl-card p-2 relative">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">Match {match.matchNumber}</span>
+          <span className="text-[9px] text-mpl-gold font-bold">{match.roundName}</span>
+        </div>
+        <div className="space-y-1.5">
+          {match.slots.map(slot => (
+            <DrawSlotRow
+              key={slot.id}
+              slot={slot}
+              isLocked={drawLocked}
+              onSwap={() => onSlotSwap(slot)}
+              onToggleLock={() => onToggleLock(slot.id)}
+              onDragStart={() => onDragStart(slot.id)}
+              onDrop={() => onDrop(slot)}
+              onClear={() => onClear(slot)}
+              onDragEnd={onDragEnd}
+              isDragging={draggedSlotId === slot.id}
+              isDraft={isDraft}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DrawSlotRow({
   slot, isLocked: drawLocked, onSwap, onToggleLock, onDragStart, onDrop, onClear, onDragEnd, isDragging, isDraft
 }: {
@@ -613,7 +763,8 @@ function DrawSlotRow({
   isDraft: boolean;
 }) {
   const isAdvance = slot.source === 'advance';
-  const canDrag = isDraft && !drawLocked && !isAdvance;
+  const isDisplayEmpty = slot.id.startsWith('display-empty');
+  const canDrag = isDraft && !drawLocked && !isAdvance && !isDisplayEmpty;
 
   return (
     <div className={cn(
@@ -666,7 +817,7 @@ function DrawSlotRow({
           <p className="text-[10px] text-mpl-gray">{slot.source === 'qualifier' ? 'Qualified team' : slot.entryRound}</p>
         </div>
       )}
-      {isDraft && !drawLocked && !isAdvance && (
+      {isDraft && !drawLocked && !isAdvance && !isDisplayEmpty && (
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onSwap} className="p-1 rounded text-mpl-gray transition-colors hover:text-mpl-gold" title="Edit slot">
             <Edit3 size={11} />
