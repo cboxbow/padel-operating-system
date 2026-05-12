@@ -143,14 +143,23 @@ export function MainDrawPage() {
     Array.from(buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2).values())
   ), [tournamentMatches, tournamentPools, selectedTournament?.qualifiersPerPool]);
   const qualifiedTeamIds = new Set(qualifiedTeamOptions.map(team => team.id));
+  const placedTeamIds = new Set(
+    editableSlots
+      .filter(slot => slot.id !== swapTarget?.id)
+      .map(slot => slot.team?.id)
+      .filter((id): id is string => Boolean(id))
+  );
+  const availableDirectTeams = directTeams.filter(team => !placedTeamIds.has(team.id));
+  const availableQualifiedTeams = qualifiedTeamOptions.filter(team => !placedTeamIds.has(team.id));
+  const availablePoolTeams = poolTeams.filter(team => !placedTeamIds.has(team.id));
   const pickerTeamGroups = swapTarget?.source === 'qualifier'
     ? [
-        { label: 'Qualified from pools', teams: qualifiedTeamOptions },
-        { label: 'All pool teams', teams: poolTeams.filter(team => !qualifiedTeamIds.has(team.id)) },
+        { label: 'Qualified from pools', teams: availableQualifiedTeams },
+        { label: 'All pool teams', teams: availablePoolTeams.filter(team => !qualifiedTeamIds.has(team.id)) },
       ]
     : [
-        { label: 'Direct / seeded teams', teams: directTeams },
-        { label: 'Qualified from pools', teams: qualifiedTeamOptions.filter(team => !directTeams.some(direct => direct.id === team.id)) },
+        { label: 'Direct / seeded teams', teams: availableDirectTeams },
+        { label: 'Qualified from pools', teams: availableQualifiedTeams.filter(team => !directTeams.some(direct => direct.id === team.id)) },
       ];
 
   const handleAutoFillDirect = () => {
