@@ -568,7 +568,7 @@ function buildMainDrawSlots(
     ));
 
     if (startRound !== entryRound) {
-      slots.push(createByeSlot(startRound, nextPosition(roundPositions, startRound)));
+      slots.push(createManualEmptySlot(startRound, nextPosition(roundPositions, startRound)));
     }
   });
 
@@ -602,7 +602,7 @@ function buildMainDrawSlots(
           team,
         ));
         if (startRound !== earliestRound) {
-          slots.push(createByeSlot(startRound, nextPosition(roundPositions, startRound)));
+          slots.push(createManualEmptySlot(startRound, nextPosition(roundPositions, startRound)));
         }
       });
   }
@@ -736,8 +736,8 @@ function buildProgressionMatches(
 
   const matchCount = Math.max(entrySlots.length, previousWinners.length);
   return Array.from({ length: matchCount }, (_, index) => {
-    const directEntry = entrySlots[index] ?? createByeSlot(roundName, (index * 2) + 1);
-    const opponent = previousWinners[index] ?? createByeSlot(roundName, (index * 2) + 2);
+    const directEntry = entrySlots[index] ?? createManualEmptySlot(roundName, (index * 2) + 1);
+    const opponent = previousWinners[index] ?? createManualEmptySlot(roundName, (index * 2) + 2);
     return {
       id: `${roundName}-match-${index + 1}`,
       roundName,
@@ -760,20 +760,19 @@ function ensureMatchPair(slots: MainDrawSlot[], roundName: DrawRoundName, matchN
 
   return [
     ...slots,
-    createByeSlot(roundName, matchNumber * 2),
+    createManualEmptySlot(roundName, matchNumber * 2),
   ];
 }
 
-function createByeSlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
+function createManualEmptySlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
   return {
-    id: `bye-${entryRound.replace('/', '')}-${position}`,
+    id: `manual-empty-${entryRound.replace('/', '')}-${position}`,
     drawId: 'main-draw-local',
     round: ROUND_ORDER.indexOf(entryRound) + 1,
     position,
     entryRound,
-    placeholder: 'BYE',
     source: 'empty',
-    isBye: true,
+    isBye: false,
     isLocked: false,
   };
 }
