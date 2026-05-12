@@ -11,6 +11,7 @@ export function PoolStandingsPage() {
 
   const tournamentPools = pools.filter(pool => pool.tournamentId === selectedTournament?.id);
   const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
+  const qualifiersPerPool = selectedTournament?.qualifiersPerPool ?? 2;
 
   return (
     <div className="flex flex-col h-full">
@@ -33,7 +34,7 @@ export function PoolStandingsPage() {
               <div key={pool.id} className="mt-4">
                 <div className="flex items-center justify-between px-4 mb-2">
                   <p className="section-title mb-0">{pool.name}</p>
-                  <span className="text-xs text-mpl-gray">{standings.slice(0, 2).length} qualified</span>
+                  <span className="text-xs text-mpl-gray">{standings.slice(0, qualifiersPerPool).length} qualified</span>
                 </div>
 
                 <div className="flex items-center gap-1 px-4 py-1.5 text-[9px] text-mpl-gray font-bold uppercase tracking-widest border-b border-mpl-border">
@@ -49,7 +50,7 @@ export function PoolStandingsPage() {
                     key={standing.team.id}
                     className={cn(
                       'w-full flex items-center gap-1 px-4 py-3 border-b border-mpl-border/40',
-                      index < 2 ? 'border-l-2 border-l-green-500/60 bg-green-500/5' : ''
+                      index < qualifiersPerPool ? 'border-l-2 border-l-green-500/60 bg-green-500/5' : ''
                     )}
                   >
                     <div className={cn(
@@ -62,7 +63,7 @@ export function PoolStandingsPage() {
                     <div className="flex-1 min-w-0 pl-2">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-semibold text-white truncate">{standing.team.name}</p>
-                        {index < 2 && <CheckCircle size={9} className="text-green-400 flex-shrink-0" />}
+                        {index < qualifiersPerPool && <CheckCircle size={9} className="text-green-400 flex-shrink-0" />}
                       </div>
                       <p className="text-[10px] text-mpl-gray">{standing.team.clubName}</p>
                     </div>

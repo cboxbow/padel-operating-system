@@ -58,6 +58,15 @@ export function MatchScorePage() {
 
   const handleSaveScore = () => {
     if (!selectedMatch) return;
+    if (!selectedMatch.team1 || !selectedMatch.team2) {
+      addToast({ type: 'error', title: 'Score Blocked', message: 'Both teams must be assigned before entering a score.' });
+      return;
+    }
+    const validationError = validateScoreEntries(scores);
+    if (validationError) {
+      addToast({ type: 'error', title: 'Invalid Score', message: validationError });
+      return;
+    }
     if (selectedMatch.status === 'completed') {
       setPendingCorrection({ matchId: selectedMatch.id, sets: buildSets(selectedMatch.id) });
       setShowOverride(true);
@@ -288,4 +297,35 @@ export function MatchScorePage() {
       />
     </div>
   );
+}
+
+function validateScoreEntries(scores: ScoreEntry[]): string | null {
+  if (scores.length === 0) return 'Add at least one set.';
+
+  let team1Sets = 0;
+  let team2Sets = 0;
+
+  for (const [index, score] of scores.entries()) {
+    if (score.t1 === '' || score.t2 === '') {
+      return `Set ${index + 1} needs both scores.`;
+    }
+
+    const team1Score = parseInt(score.t1, 10);
+    const team2Score = parseInt(score.t2, 10);
+    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) {
+      return `Set ${index + 1} contains an invalid number.`;
+    }
+    if (team1Score === team2Score) {
+      return `Set ${index + 1} cannot finish tied.`;
+    }
+
+    if (team1Score > team2Score) team1Sets += 1;
+    if (team2Score > team1Score) team2Sets += 1;
+  }
+
+  if (team1Sets === team2Sets) {
+    return 'The match needs a clear winner. Add a deciding set or super tie-break.';
+  }
+
+  return null;
 }

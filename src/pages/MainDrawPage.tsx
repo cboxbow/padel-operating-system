@@ -6,7 +6,7 @@ import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import type { DrawSlot, Pool, Registration, Team } from '../types';
+import type { DrawSlot, MatchSet, Pool, Registration, ScheduledMatch, Team } from '../types';
 
 type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER';
 type MainDrawSlot = DrawSlot & {
@@ -35,7 +35,7 @@ const BRACKET_BAND_HEIGHT = 104;
 export function MainDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
   const { addToast } = useToast();
-  const { addAuditLog, registrations, pools } = useTournamentData();
+  const { addAuditLog, registrations, pools, matches } = useTournamentData();
 
   const tournamentRegistrations = useMemo(() => (
     registrations.filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
@@ -64,6 +64,9 @@ export function MainDrawPage() {
       .filter(pool => pool.tournamentId === selectedTournament?.id)
       .sort((a, b) => a.letter.localeCompare(b.letter))
   ), [pools, selectedTournament?.id]);
+  const tournamentMatches = useMemo(() => (
+    matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId)
+  ), [matches, selectedTournament?.id]);
 
   const [slots, setSlots] = useState<MainDrawSlot[]>([]);
   const [drawStatus, setDrawStatus] = useState<'draft' | 'published' | 'locked'>('draft');
@@ -77,7 +80,9 @@ export function MainDrawPage() {
   const teamSignature = tournamentRegistrations
     .map(reg => `${reg.id}:${reg.team.id}:${reg.team.seed ?? ''}:${reg.team.ranking ?? ''}:${getDrawEntry(reg.notes)}`)
     .join('|');
-  const poolSignature = tournamentPools.map(pool => `${pool.id}:${pool.letter}`).join('|');
+  const poolSignature = tournamentPools
+    .map(pool => `${pool.id}:${pool.letter}:${pool.slots.map(slot => `${slot.position}:${slot.team?.id ?? ''}`).join(',')}`)
+    .join('|');
 
   useEffect(() => {
     setSlots(buildMainDrawSlots(
@@ -120,7 +125,7 @@ export function MainDrawPage() {
   };
 
   const handleAutoFillQualifiers = () => {
-    const qualifiersByCode = buildQualifierMap(tournamentPools, selectedTournament?.qualifiersPerPool ?? 2);
+    const qualifiersByCode = buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2);
     setSlots(prev => prev.map(slot => {
       if (slot.source !== 'qualifier' || !slot.placeholder) return slot;
       const team = qualifiersByCode.get(slot.placeholder);
@@ -620,24 +625,69 @@ function buildDirectSlotLabel(team: Team, entryRound: DrawRoundName): string {
   return `Direct ${entryRound}`;
 }
 
-function buildQualifierMap(pools: Pool[], qualifiersPerPool: number): Map<string, Team> {
+function buildQualifierMap(pools: Pool[], matches: ScheduledMatch[], qualifiersPerPool: number): Map<string, Team> {
   const map = new Map<string, Team>();
   const limit = normalizeQualifiersPerPool(qualifiersPerPool);
 
   pools.forEach(pool => {
-    const rankedTeams = [...pool.slots]
-      .sort((a, b) => a.position - b.position)
-      .filter(slot => slot.team)
+    const rankedTeams = calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
       .slice(0, limit);
 
-    rankedTeams.forEach((slot, index) => {
-      if (slot.team) {
-        map.set(`Q${pool.letter}${index + 1}`, slot.team);
-      }
+    rankedTeams.forEach((standing, index) => {
+      map.set(`Q${pool.letter}${index + 1}`, standing.team);
     });
   });
 
   return map;
+}
+
+function calculatePoolStandings(pool: Pool, matches: ScheduledMatch[]) {
+  const rows = pool.slots
+    .filter(slot => slot.team)
+    .map(slot => ({
+      team: slot.team!,
+      wins: 0,
+      losses: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      initialPosition: slot.position,
+    }));
+
+  const byTeamId = new Map(rows.map(row => [row.team.id, row]));
+
+  matches.filter(match => match.status === 'completed').forEach(match => {
+    if (!match.team1 || !match.team2) return;
+    const row1 = byTeamId.get(match.team1.id);
+    const row2 = byTeamId.get(match.team2.id);
+    if (!row1 || !row2) return;
+
+    match.sets.forEach((set: MatchSet) => {
+      row1.gamesWon += set.team1Score;
+      row1.gamesLost += set.team2Score;
+      row2.gamesWon += set.team2Score;
+      row2.gamesLost += set.team1Score;
+    });
+
+    if (match.winnerId === match.team1.id) {
+      row1.wins += 1;
+      row2.losses += 1;
+    } else if (match.winnerId === match.team2.id) {
+      row2.wins += 1;
+      row1.losses += 1;
+    }
+  });
+
+  return rows.sort((a, b) => {
+    const winDiff = b.wins - a.wins;
+    if (winDiff !== 0) return winDiff;
+    const gameDiff = (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost);
+    if (gameDiff !== 0) return gameDiff;
+    const seedDiff = (a.team.seed ?? Number.MAX_SAFE_INTEGER) - (b.team.seed ?? Number.MAX_SAFE_INTEGER);
+    if (seedDiff !== 0) return seedDiff;
+    const rankingDiff = (a.team.ranking ?? Number.MAX_SAFE_INTEGER) - (b.team.ranking ?? Number.MAX_SAFE_INTEGER);
+    if (rankingDiff !== 0) return rankingDiff;
+    return a.initialPosition - b.initialPosition;
+  });
 }
 
 function getStartRoundForEntry(entryRound: DrawRoundName): DrawRoundName {

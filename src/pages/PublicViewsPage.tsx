@@ -15,6 +15,7 @@ export function PublicPoolsPage() {
     .filter(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status))
     .sort((a, b) => a.letter.localeCompare(b.letter));
   const poolMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
+  const qualifiersPerPool = selectedTournament?.qualifiersPerPool ?? 2;
 
   return (
     <div className="flex flex-col h-full">
@@ -46,7 +47,11 @@ export function PublicPoolsPage() {
                   <span className="status-badge status-published">{pool.status}</span>
                 </div>
                 <PoolTeams pool={pool} />
-                <PoolStandings pool={pool} matches={poolMatches.filter(match => match.poolId === pool.id)} />
+                <PoolStandings
+                  pool={pool}
+                  matches={poolMatches.filter(match => match.poolId === pool.id)}
+                  qualifiersPerPool={qualifiersPerPool}
+                />
                 <GoldDivider />
               </div>
             ))
@@ -197,7 +202,15 @@ function PoolTeams({ pool }: { pool: Pool }) {
   );
 }
 
-function PoolStandings({ pool, matches }: { pool: Pool; matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[] }) {
+function PoolStandings({
+  pool,
+  matches,
+  qualifiersPerPool,
+}: {
+  pool: Pool;
+  matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[];
+  qualifiersPerPool: number;
+}) {
   const standings = calculatePoolStandings(pool, matches);
 
   if (standings.length === 0) return null;
@@ -216,7 +229,7 @@ function PoolStandings({ pool, matches }: { pool: Pool; matches: { team1?: Team;
         {standings.map((standing, index) => (
           <div key={standing.team.id} className={cn(
             'flex items-center gap-1 px-4 py-2.5 border-b border-mpl-border/40 last:border-0',
-            index < 2 ? 'bg-green-500/5' : ''
+            index < qualifiersPerPool ? 'bg-green-500/5' : ''
           )}>
             <div className={cn(
               'w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0',
@@ -225,7 +238,7 @@ function PoolStandings({ pool, matches }: { pool: Pool; matches: { team1?: Team;
             )}>{index + 1}</div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{standing.team.name}</p>
-              {index < 2 && <span className="text-[9px] text-green-400 font-bold">Qualified</span>}
+              {index < qualifiersPerPool && <span className="text-[9px] text-green-400 font-bold">Qualified</span>}
             </div>
             <span className="w-7 text-center text-sm font-bold text-green-400">{standing.wins}</span>
             <span className="w-7 text-center text-sm font-bold text-red-400">{standing.losses}</span>

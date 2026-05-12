@@ -12,9 +12,10 @@ export function QualifiedTeamsPage() {
 
   const tournamentPools = pools.filter(pool => pool.tournamentId === selectedTournament?.id);
   const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
+  const qualifiersPerPool = selectedTournament?.qualifiersPerPool ?? 2;
   const qualified = tournamentPools.flatMap(pool => (
     calculatePoolStandings(pool, tournamentMatches.filter(match => match.poolId === pool.id))
-      .slice(0, 2)
+      .slice(0, qualifiersPerPool)
       .map((standing, index) => ({
         pool,
         team: standing.team,
