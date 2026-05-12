@@ -112,28 +112,28 @@ export function MatchSchedulePage() {
                   .sort((a, b) => (a.scheduledTime ?? '').localeCompare(b.scheduledTime ?? ''))
                   .map(m => (
                     <div key={m.id} className={cn(
-                      'mpl-card p-3 flex items-start gap-3',
+                      'mpl-card px-3 py-2.5 flex items-start gap-2.5',
                       m.status === 'completed' ? 'border-green-500/20' :
                       m.isConfirmed ? 'border-mpl-gold/20' : 'border-mpl-border'
                     )}>
                       {/* Time column */}
-                      <div className="flex-shrink-0 w-14 text-center">
+                      <div className="flex-shrink-0 w-10 text-center">
                         {m.scheduledTime ? (
                           <>
-                            <p className="text-sm font-black text-white">
+                            <p className="text-[11px] font-black text-white">
                               {new Date(m.scheduledTime).toLocaleTimeString('en-MU', { hour: '2-digit', minute: '2-digit' })}
                             </p>
                             {m.estimatedDuration && <p className="text-[9px] text-mpl-gray">{m.estimatedDuration}min</p>}
                           </>
                         ) : (
-                          <p className="text-xs text-mpl-gray">TBD</p>
+                          <p className="text-[11px] text-mpl-gray">TBD</p>
                         )}
                       </div>
 
                       {/* Match info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[9px] text-mpl-gray font-mono font-bold uppercase">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[8px] text-mpl-gray font-mono font-bold uppercase">
                             {m.poolId ? `Pool ${m.poolId.slice(-1).toUpperCase()}` : 'Main Draw'} · M{m.matchNumber}
                           </span>
                           {m.courtName && (
@@ -142,7 +142,7 @@ export function MatchSchedulePage() {
                             </span>
                           )}
                           <span className={cn(
-                            'ml-auto text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border',
+                            'ml-auto text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border',
                             m.status === 'completed' ? 'text-green-400 border-green-400/30' :
                             m.isConfirmed ? 'text-mpl-gold border-mpl-gold/30' :
                             'text-mpl-gray border-mpl-border'
@@ -150,9 +150,12 @@ export function MatchSchedulePage() {
                             {m.status === 'completed' ? '✓ done' : m.isConfirmed ? 'confirmed' : 'draft'}
                           </span>
                         </div>
-                        <p className="text-sm font-semibold text-white truncate">
-                          {m.team1?.name ?? 'TBD'} <span className="text-mpl-gray font-normal text-xs">vs</span> {m.team2?.name ?? 'TBD'}
-                        </p>
+                        <div className="space-y-0.5">
+                          <p className="text-[11px] leading-tight font-semibold text-white truncate">{m.team1?.name ?? 'TBD'}</p>
+                          <p className="text-[11px] leading-tight font-semibold text-white truncate">
+                            <span className="text-[9px] text-mpl-gray font-normal mr-1">vs</span>{m.team2?.name ?? 'TBD'}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Edit button */}

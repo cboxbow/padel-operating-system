@@ -144,15 +144,15 @@ export function MatchScorePage() {
             <div className="px-4 space-y-3">
               {filtered.map(m => (
                 <button key={m.id} onClick={() => openMatch(m)}
-                  className="w-full mpl-card p-4 text-left hover:border-mpl-gold/30 transition-all">
-                  <div className="flex items-center justify-between mb-3">
+                  className="w-full mpl-card px-3 py-3 text-left hover:border-mpl-gold/30 transition-all">
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-mpl-gray font-mono font-bold uppercase">
+                      <span className="text-[8px] text-mpl-gray font-mono font-bold uppercase">
                         {m.poolId ? `Pool ${m.poolId.slice(-1).toUpperCase()}` : 'Main Draw'} · M{m.matchNumber}
                       </span>
                       {m.courtName && <span className="text-[10px] text-mpl-gold border border-mpl-gold/30 px-1.5 py-0.5 rounded">{m.courtName}</span>}
                     </div>
-                    <span className={cn('text-[10px] font-bold uppercase px-2 py-1 rounded-full border', statusColor(m))}>
+                    <span className={cn('text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full border', statusColor(m))}>
                       {m.status}
                     </span>
                   </div>
@@ -161,7 +161,7 @@ export function MatchScorePage() {
                       <div key={ti} className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           {m.winnerId === team?.id && <Trophy size={10} className="text-mpl-gold flex-shrink-0" />}
-                          <span className={cn('text-sm font-semibold truncate', m.winnerId === team?.id ? 'text-mpl-gold' : 'text-white')}>
+                          <span className={cn('text-[11px] leading-tight font-semibold truncate', m.winnerId === team?.id ? 'text-mpl-gold' : 'text-white')}>
                             {team?.name ?? 'TBD'}
                           </span>
                         </div>
