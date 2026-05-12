@@ -49,7 +49,7 @@ import {
   type CreateTeamRegistrationInput,
 } from './data/registrations';
 import { updateTeamSeed } from './data/teams';
-import { fetchPools, generatePoolDraw, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
+import { addPoolSlot, fetchPools, generatePoolDraw, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
 import { fetchMatches, generatePoolMatchesForTournament, saveMatchScore, updateMatchSchedule } from './data/matches';
 import { supabase } from './supabaseClient';
 
@@ -226,6 +226,7 @@ interface TournamentDataContextValue {
   refreshRegistrations: () => Promise<void>;
   generatePools: (tournamentId: string, teams: Team[]) => Promise<void>;
   refreshPools: () => Promise<void>;
+  addSlotToPool: (poolId: string) => Promise<void>;
   updatePoolSlot: (poolId: string, position: number, team: Team | undefined) => Promise<void>;
   toggleSlotLock: (poolId: string, position: number) => Promise<void>;
   redrawPool: (poolId: string, teams: Team[]) => void;
@@ -256,6 +257,7 @@ const TournamentDataContext = createContext<TournamentDataContextValue>({
   refreshRegistrations: async () => undefined,
   generatePools: async () => undefined,
   refreshPools: async () => undefined,
+  addSlotToPool: async () => undefined,
   updatePoolSlot: async () => undefined,
   toggleSlotLock: async () => undefined,
   redrawPool: () => undefined,
@@ -434,6 +436,26 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
     ));
   }, [pools]);
 
+  const addSlotToPool = useCallback(async (poolId: string) => {
+    const pool = pools.find(p => p.id === poolId);
+    if (!pool) return;
+
+    const nextPosition = Math.max(0, ...pool.slots.map(slot => slot.position)) + 1;
+    await addPoolSlot(poolId, nextPosition);
+    await refreshPools();
+    addAuditLog({
+      action: 'POOL_SLOT_ADDED',
+      module: 'Pool Draw',
+      entityType: 'pool',
+      entityId: poolId,
+      description: `${pool.name} slot ${nextPosition} added manually by Admin MPL.`,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: true,
+      overrideReason: 'Manual pool size adjustment.',
+    });
+  }, [addAuditLog, pools, refreshPools]);
+
   const toggleSlotLock = useCallback(async (poolId: string, position: number) => {
     const pool = pools.find(p => p.id === poolId);
     const slot = pool?.slots.find(s => s.position === position);
@@ -601,7 +623,7 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
   return (
     <TournamentDataContext.Provider value={{
       registrations, pools, standings, matches, auditLogs, overrides, registrationsError, poolsError, matchesError,
-      validateRegistration, rejectRegistration, addTeamRegistration, refreshRegistrations, generatePools, refreshPools, updatePoolSlot, toggleSlotLock,
+      validateRegistration, rejectRegistration, addTeamRegistration, refreshRegistrations, generatePools, refreshPools, addSlotToPool, updatePoolSlot, toggleSlotLock,
       redrawPool, publishPool, updateSeed, completeMatchScore, generatePoolMatches, scheduleMatch, refreshMatches,
       overrideStanding, addAuditLog, addOverride,
     }}>

@@ -187,6 +187,35 @@ export async function updatePoolStatus(poolId: string, status: Pool['status']): 
   }
 }
 
+export async function addPoolSlot(poolId: string, position: number): Promise<void> {
+  if (!isUuid(poolId)) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('pool_slots')
+    .insert({
+      pool_id: poolId,
+      position,
+      team_id: null,
+      is_locked: false,
+      is_seed_protected: false,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  const { error: poolError } = await supabase
+    .from('pools')
+    .update({ max_teams: position })
+    .eq('id', poolId);
+
+  if (poolError) {
+    throw poolError;
+  }
+}
+
 export async function generatePoolDraw(tournamentId: string, teams: Team[]): Promise<void> {
   if (teams.length < 2) {
     throw new Error('At least 2 validated teams are required to generate pools.');

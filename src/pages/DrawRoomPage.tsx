@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle
+  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -118,7 +118,7 @@ export function DrawRoomPage() {
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
 export function PoolDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
-  const { pools, poolsError, registrations, generatePools, redrawPool, publishPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
+  const { pools, poolsError, registrations, generatePools, redrawPool, publishPool, addSlotToPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
   const { addToast } = useToast();
 
   const [selectedPool, setSelectedPool] = useState<string>('');
@@ -194,6 +194,21 @@ export function PoolDrawPage() {
   const handleSlotSwap = (slot: PoolSlot) => {
     setSlotToSwap(slot);
     setShowSwapPicker(true);
+  };
+
+  const handleAddSlot = async () => {
+    if (!pool) return;
+
+    try {
+      await addSlotToPool(pool.id);
+      addToast({ type: 'success', title: 'Slot Added', message: `${pool.name} now has one more editable slot.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Slot Add Failed',
+        message: error instanceof Error ? error.message : 'Unable to add slot.',
+      });
+    }
   };
 
   const handleSwapWithTeam = (team: Team | null) => {
@@ -355,14 +370,19 @@ export function PoolDrawPage() {
                     <Shuffle size={14} /> Random Redraw (Keep Locked)
                   </button>
                   <button
+                    className="w-full btn-ghost flex items-center justify-center gap-2"
+                    onClick={() => void handleAddSlot()}
+                  >
+                    <Plus size={14} /> Add Empty Slot
+                  </button>
+                  <button
                     className="w-full btn-gold flex items-center justify-center gap-2"
                     onClick={() => setShowPublishConfirm(true)}
-                    disabled={pool.slots.some(s => s.isEmpty)}
                   >
                     <Globe size={14} /> Publish Official Pool Draw
                   </button>
                   {pool.slots.some(s => s.isEmpty) && (
-                    <p className="text-xs text-orange-400 text-center">⚠️ All slots must be filled before publishing.</p>
+                    <p className="text-xs text-orange-400 text-center">Empty slots will publish as TBD/BYE and can still be edited later.</p>
                   )}
                 </div>
               )}
@@ -425,7 +445,7 @@ export function PoolDrawPage() {
         onClose={() => setShowPublishConfirm(false)}
         onConfirm={() => void handlePublish()}
         title={`Publish ${pool?.name ?? 'Pool'} Draw?`}
-        message="This will make the pool draw official and visible to all players. This action is logged in the audit trail. You can still override slots after publishing."
+        message="This will make the pool draw official and visible to all players. Empty slots are allowed and will remain editable as TBD/BYE. This action is logged in the audit trail."
         confirmLabel="Publish Official Draw"
         variant="gold"
       />

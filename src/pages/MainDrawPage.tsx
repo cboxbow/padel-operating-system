@@ -1,77 +1,121 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3
+  Shuffle, Lock, Unlock, Globe, Edit3, Plus
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import type { DrawSlot, Team } from '../types';
+import type { DrawSlot, Pool, Registration, Team } from '../types';
+
+type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER';
+type MainDrawSlot = DrawSlot & {
+  entryRound: DrawRoundName;
+  placeholder?: string;
+  source?: 'team' | 'qualifier' | 'empty' | 'advance';
+};
+
+interface DrawColumn {
+  name: DrawRoundName;
+  entries: MainDrawSlot[];
+  advances: MainDrawSlot[];
+}
+
+const ROUND_ORDER: DrawRoundName[] = ['1/32', '1/16', '1/8', '1/4', '1/2', 'FINAL', 'WINNER'];
 
 export function MainDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
   const { addToast } = useToast();
-  const { addAuditLog, registrations } = useTournamentData();
+  const { addAuditLog, registrations, pools } = useTournamentData();
 
-  const validatedTeams = useMemo(() => (
-    registrations
-      .filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
-      .map(r => r.team)
-      .sort((a, b) => {
-        const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
-        if (seedDiff !== 0) return seedDiff;
-        return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
-      })
+  const tournamentRegistrations = useMemo(() => (
+    registrations.filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
   ), [registrations, selectedTournament?.id]);
 
-  const [slots, setSlots] = useState<DrawSlot[]>([]);
+  const validatedTeams = useMemo(() => (
+    tournamentRegistrations
+      .map(r => r.team)
+      .sort(sortTeamsForDraw)
+  ), [tournamentRegistrations]);
+
+  const tournamentPools = useMemo(() => (
+    pools
+      .filter(pool => pool.tournamentId === selectedTournament?.id)
+      .sort((a, b) => a.letter.localeCompare(b.letter))
+  ), [pools, selectedTournament?.id]);
+
+  const [slots, setSlots] = useState<MainDrawSlot[]>([]);
   const [drawStatus, setDrawStatus] = useState<'draft' | 'published' | 'locked'>('draft');
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
-  const [swapTarget, setSwapTarget] = useState<DrawSlot | null>(null);
+  const [swapTarget, setSwapTarget] = useState<MainDrawSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
 
-  const qualifiedTeams = validatedTeams;
-  const teamSignature = validatedTeams.map(team => `${team.id}:${team.seed ?? ''}:${team.ranking ?? ''}`).join('|');
+  const teamSignature = tournamentRegistrations
+    .map(reg => `${reg.id}:${reg.team.id}:${reg.team.seed ?? ''}:${reg.team.ranking ?? ''}:${getDrawEntry(reg.notes)}`)
+    .join('|');
+  const poolSignature = tournamentPools.map(pool => `${pool.id}:${pool.letter}`).join('|');
 
   useEffect(() => {
-    setSlots(buildMainDrawSlots(validatedTeams));
+    setSlots(buildMainDrawSlots(tournamentRegistrations, tournamentPools, selectedTournament?.competitionMode));
     setDrawStatus('draft');
-  }, [selectedTournament?.id, teamSignature, validatedTeams]);
+  }, [selectedTournament?.id, selectedTournament?.competitionMode, teamSignature, poolSignature]);
 
-  const totalSlots = slots.length;
-  const filledSlots = slots.filter(s => s.team || s.isBye).length;
-  const byeCount = slots.filter(s => s.isBye).length;
-  const lockedSlots = slots.filter(s => s.isLocked).length;
+  const columns = useMemo(() => buildDrawColumns(slots), [slots]);
+  const editableSlots = slots.filter(slot => slot.source !== 'advance');
+  const totalSlots = editableSlots.length;
+  const filledSlots = editableSlots.filter(s => s.team || s.isBye || s.placeholder).length;
+  const byeCount = editableSlots.filter(s => s.isBye).length;
+  const lockedSlots = editableSlots.filter(s => s.isLocked).length;
+  const directTeams = editableSlots.filter(s => s.source === 'team').length;
+  const qualifierSlots = editableSlots.filter(s => s.source === 'qualifier').length;
 
   const handleRandomDraw = () => {
-    // unlockedSlots reserved for future batched draw logic
     const lockedTeamIds = new Set(slots.filter(slot => slot.isLocked && slot.team).map(slot => slot.team!.id));
-    const shuffled = [...qualifiedTeams]
+    const shuffled = [...validatedTeams]
       .filter(team => !lockedTeamIds.has(team.id))
       .sort(() => Math.random() - 0.5);
+
     let teamIdx = 0;
-    const newSlots = slots.map(s => {
-      if (s.isLocked) return s;
-      if (teamIdx < shuffled.length) {
-        return { ...s, team: shuffled[teamIdx++], isBye: false };
-      }
-      return { ...s, team: undefined, isBye: true };
-    });
-    setSlots(newSlots);
+    setSlots(prev => prev.map(slot => {
+      if (slot.isLocked || slot.source === 'advance') return slot;
+      const team = shuffled[teamIdx++];
+      return {
+        ...slot,
+        team,
+        placeholder: team ? undefined : slot.placeholder,
+        isBye: !team && slot.source === 'empty',
+      };
+    }));
     addAuditLog({
-      action: 'MAIN_DRAW_REDRAW', module: 'Main Draw',
-      entityType: 'draw', entityId: 'draw1',
+      action: 'MAIN_DRAW_REDRAW',
+      module: 'Main Draw',
+      entityType: 'draw',
+      entityId: 'main-draw-local',
       description: 'Main draw redrawn randomly by Admin MPL.',
-      adminId: 'adm1', adminName: 'Admin MPL', isOverride: false,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
     });
     addToast({ type: 'info', title: 'Main Draw Redrawn', message: 'Locked slots preserved.' });
   };
 
-  const handleToggleBye = (slotId: string) => {
-    setSlots(prev => prev.map(s =>
-      s.id === slotId ? { ...s, isBye: !s.isBye, team: s.isBye ? s.team : undefined } : s
-    ));
+  const handleAddMainSlot = () => {
+    const entryRound = slots[0]?.entryRound ?? '1/8';
+    const position = Math.max(0, ...slots.filter(slot => slot.entryRound === entryRound).map(slot => slot.position)) + 1;
+    const nextSlot: MainDrawSlot = {
+      id: `main-slot-manual-${Date.now()}`,
+      drawId: 'main-draw-local',
+      round: ROUND_ORDER.indexOf(entryRound) + 1,
+      position,
+      entryRound,
+      isBye: false,
+      isLocked: false,
+      source: 'empty',
+    };
+
+    setSlots(prev => [...prev, nextSlot].sort(sortSlotsByRound));
+    addToast({ type: 'success', title: 'Slot Added', message: `${entryRound} now has one more editable slot.` });
   };
 
   const handleToggleLock = (slotId: string) => {
@@ -82,25 +126,34 @@ export function MainDrawPage() {
     addToast({ type: 'info', title: slot?.isLocked ? 'Slot Unlocked' : 'Slot Locked' });
   };
 
-  const handleSlotSwap = (slot: DrawSlot) => {
+  const handleSlotSwap = (slot: MainDrawSlot) => {
     setSwapTarget(slot);
     setShowSwapPicker(true);
   };
 
   const handleSwapTeam = (team: Team | 'bye' | null) => {
     if (!swapTarget) return;
-    setSlots(prev => prev.map(s =>
-      s.id === swapTarget.id
-        ? { ...s, team: team === 'bye' || team === null ? undefined : team, isBye: team === 'bye' }
-        : s
-    ));
+    setSlots(prev => prev.map(s => {
+      if (s.id !== swapTarget.id) return s;
+      return {
+        ...s,
+        team: team === 'bye' || team === null ? undefined : team,
+        placeholder: undefined,
+        source: team === null ? 'empty' : s.source,
+        isBye: team === 'bye',
+      };
+    }));
     setSwapTarget(null);
     setShowSwapPicker(false);
     addAuditLog({
-      action: 'MAIN_DRAW_SLOT_EDIT', module: 'Main Draw',
-      entityType: 'draw_slot', entityId: swapTarget.id,
+      action: 'MAIN_DRAW_SLOT_EDIT',
+      module: 'Main Draw',
+      entityType: 'draw_slot',
+      entityId: swapTarget.id,
       description: `Main draw slot ${swapTarget.position} updated to ${team === 'bye' ? 'BYE' : (team as Team)?.name ?? 'Empty'}`,
-      adminId: 'adm1', adminName: 'Admin MPL', isOverride: true,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: true,
       overrideReason: 'Manual admin placement.',
     });
     addToast({ type: 'info', title: 'Slot Updated' });
@@ -112,12 +165,17 @@ export function MainDrawPage() {
       void setTournamentStatus(selectedTournament.id, 'main_draw_published');
     }
     addAuditLog({
-      action: 'MAIN_DRAW_PUBLISHED', module: 'Main Draw',
-      entityType: 'draw', entityId: 'draw1',
+      action: 'MAIN_DRAW_PUBLISHED',
+      module: 'Main Draw',
+      entityType: 'draw',
+      entityId: 'main-draw-local',
       description: 'Main draw published officially by Admin MPL.',
-      adminId: 'adm1', adminName: 'Admin MPL', isOverride: false,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
     });
     addToast({ type: 'success', title: 'Main Draw Published!', message: 'Bracket is now visible to all players.' });
+    setShowPublishConfirm(false);
   };
 
   const handleLock = () => {
@@ -126,20 +184,18 @@ export function MainDrawPage() {
       void setTournamentStatus(selectedTournament.id, 'locked');
     }
     addAuditLog({
-      action: 'MAIN_DRAW_LOCKED', module: 'Main Draw',
-      entityType: 'draw', entityId: 'draw1',
+      action: 'MAIN_DRAW_LOCKED',
+      module: 'Main Draw',
+      entityType: 'draw',
+      entityId: 'main-draw-local',
       description: 'Main draw locked by Admin MPL.',
-      adminId: 'adm1', adminName: 'Admin MPL', isOverride: false,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: false,
     });
     addToast({ type: 'warning', title: 'Main Draw Locked', message: 'No further edits possible.' });
+    setShowLockConfirm(false);
   };
-
-  // Build rounds from slots
-  const rounds: DrawSlot[][] = [];
-  const totalRounds = Math.ceil(Math.log2(slots.length));
-  for (let r = 1; r <= totalRounds; r++) {
-    rounds.push(slots.filter(s => s.round === r));
-  }
 
   return (
     <div className="flex flex-col h-full">
@@ -159,13 +215,11 @@ export function MainDrawPage() {
       />
       <div className="flex-1 overflow-y-auto">
         <div className="pb-24">
-
-          {/* Stats */}
           <div className="grid grid-cols-4 gap-2 px-4 pt-4">
             {[
               { label: 'Slots', value: totalSlots },
-              { label: 'Filled', value: filledSlots },
-              { label: 'BYEs', value: byeCount },
+              { label: 'Direct', value: directTeams },
+              { label: 'Qualif', value: qualifierSlots },
               { label: 'Locked', value: lockedSlots },
             ].map(s => (
               <div key={s.label} className="mpl-card p-3 text-center">
@@ -181,19 +235,25 @@ export function MainDrawPage() {
             </div>
           )}
 
-          {/* Actions */}
           {drawStatus === 'draft' && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleRandomDraw}>
                   <Shuffle size={13} /> Random Draw
                 </button>
-                <button className="btn-gold flex-1 flex items-center justify-center gap-2 text-xs" onClick={() => setShowPublishConfirm(true)}>
-                  <Globe size={13} /> Publish Draw
+                <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAddMainSlot}>
+                  <Plus size={13} /> Add Slot
                 </button>
               </div>
+              <button className="w-full btn-gold flex items-center justify-center gap-2 text-xs" onClick={() => setShowPublishConfirm(true)}>
+                <Globe size={13} /> Publish Draw
+              </button>
+              {filledSlots < totalSlots && (
+                <p className="text-xs text-orange-400 text-center">Empty slots are allowed and will publish as TBD/BYE.</p>
+              )}
             </div>
           )}
+
           {drawStatus === 'published' && (
             <div className="px-4 mt-4">
               <button className="w-full btn-danger flex items-center justify-center gap-2" onClick={() => setShowLockConfirm(true)}>
@@ -201,6 +261,7 @@ export function MainDrawPage() {
               </button>
             </div>
           )}
+
           {drawStatus === 'locked' && (
             <div className="mx-4 mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
               <Lock size={14} className="text-red-400" />
@@ -210,53 +271,53 @@ export function MainDrawPage() {
 
           <GoldDivider />
 
-          {/* Bracket Visualization */}
           <div className="px-4">
-            <p className="section-title">Round 1 — Main Draw Bracket</p>
-            <div className="space-y-2">
-              {slots.map((slot, i) => {
-                if (i % 2 !== 0) return null;
-                const slotA = slot;
-                const slotB = slots[i + 1];
-                return (
-                  <div key={slotA.id} className="mpl-card p-3">
-                    <div className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest mb-2 px-1">Match {Math.floor(i / 2) + 1}</div>
-                    <div className="space-y-1.5">
-                      {[slotA, slotB].filter(Boolean).map(s => (
+            <div className="flex items-center justify-between gap-3">
+              <p className="section-title">Excel Style Main Draw</p>
+              <p className="text-[10px] text-mpl-gray">{byeCount} BYEs</p>
+            </div>
+            <div className="overflow-x-auto no-scrollbar pb-2">
+              <div className="flex gap-3 min-w-max">
+                {columns.map(column => (
+                  <div key={column.name} className="w-48 flex-shrink-0">
+                    <div className="sticky top-0 z-10 bg-mpl-black pb-2">
+                      <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{column.name}</p>
+                      <p className="text-[10px] text-mpl-gray">{column.entries.length + column.advances.length} bracket lines</p>
+                    </div>
+                    <div className="space-y-2">
+                      {[...column.entries, ...column.advances].map(slot => (
                         <DrawSlotRow
-                          key={s.id}
-                          slot={s}
+                          key={slot.id}
+                          slot={slot}
                           isLocked={drawStatus === 'locked'}
-                          onSwap={() => handleSlotSwap(s)}
-                          onToggleLock={() => handleToggleLock(s.id)}
-                          _onToggleBye={() => handleToggleBye(s.id)}
+                          onSwap={() => handleSlotSwap(slot)}
+                          onToggleLock={() => handleToggleLock(slot.id)}
                           isDraft={drawStatus === 'draft'}
                         />
                       ))}
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Team Swap Picker */}
       {showSwapPicker && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setShowSwapPicker(false)}>
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
           <div className="relative w-full max-w-md bg-mpl-card border border-mpl-border rounded-t-3xl max-h-[70vh] flex flex-col animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-mpl-border">
-              <p className="font-bold text-white">Assign to Slot {swapTarget?.position}</p>
-              <button onClick={() => setShowSwapPicker(false)} className="text-mpl-gray text-lg">✕</button>
+              <p className="font-bold text-white">Assign to {swapTarget?.entryRound} Slot {swapTarget?.position}</p>
+              <button onClick={() => setShowSwapPicker(false)} className="text-mpl-gray text-lg">x</button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <button
                 className="w-full p-3 rounded-xl border border-dashed border-yellow-500/40 text-yellow-400 text-sm font-semibold hover:bg-yellow-500/10 transition-colors"
                 onClick={() => handleSwapTeam('bye')}
               >
-                BYE (automatic advancement)
+                BYE / TBD slot
               </button>
               <button
                 className="w-full p-3 rounded-xl border border-dashed border-mpl-border text-mpl-gray text-sm hover:border-red-400/50 hover:text-red-400 transition-colors"
@@ -264,7 +325,7 @@ export function MainDrawPage() {
               >
                 Clear Slot
               </button>
-              {qualifiedTeams.map(team => (
+              {validatedTeams.map(team => (
                 <button
                   key={team.id}
                   onClick={() => handleSwapTeam(team)}
@@ -275,7 +336,7 @@ export function MainDrawPage() {
                       'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0',
                       team.seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
                     )}>
-                      {team.seed ? `#${team.seed}` : 'Q'}
+                      {team.seed ? `#${team.seed}` : team.ranking ?? '-'}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-white">{team.name}</p>
@@ -294,7 +355,7 @@ export function MainDrawPage() {
         onClose={() => setShowPublishConfirm(false)}
         onConfirm={handlePublish}
         title="Publish Main Draw?"
-        message="This will make the main draw official and visible to all players. This action will be logged in the audit trail."
+        message="This will make the main draw official and visible to all players. Empty slots, qualifiers and BYEs are allowed and remain part of the published bracket."
         confirmLabel="Publish Official Draw"
         variant="gold"
       />
@@ -311,46 +372,161 @@ export function MainDrawPage() {
   );
 }
 
-function buildMainDrawSlots(teams: Team[]): DrawSlot[] {
-  if (teams.length === 0) return [];
+function buildMainDrawSlots(
+  registrations: Registration[],
+  pools: Pool[],
+  competitionMode?: 'main_draw_direct' | 'qualification_phase',
+): MainDrawSlot[] {
+  const directRegistrations = registrations
+    .filter(reg => getDrawEntry(reg.notes) !== 'QUALIF')
+    .sort((a, b) => sortTeamsForDraw(a.team, b.team));
+  const entryRounds = directRegistrations
+    .map(reg => normalizeDrawEntry(getDrawEntry(reg.notes)))
+    .filter((round): round is DrawRoundName => Boolean(round));
+  const earliestRound = getEarliestRound(entryRounds, competitionMode === 'qualification_phase' ? pools : []);
+  const slots: MainDrawSlot[] = [];
+  const roundPositions = new Map<DrawRoundName, number>();
 
-  const bracketSize = nextPowerOfTwo(Math.max(2, teams.length));
-  return Array.from({ length: bracketSize }, (_, index) => {
-    const team = teams[index];
-    const isBye = !team;
-    return {
-      id: `main-slot-${index + 1}`,
-      drawId: 'main-draw-local',
-      round: 1,
-      position: index + 1,
-      team,
-      isBye,
-      isLocked: Boolean(team?.seed),
-    };
+  directRegistrations.forEach(reg => {
+    const entryRound = normalizeDrawEntry(getDrawEntry(reg.notes)) ?? earliestRound;
+    slots.push(createEntrySlot(entryRound, nextPosition(roundPositions, entryRound), reg.team, 'team'));
+  });
+
+  if (competitionMode === 'qualification_phase' && pools.length > 0) {
+    pools.forEach(pool => {
+      [1, 2].forEach(rank => {
+        slots.push(createEntrySlot(
+          earliestRound,
+          nextPosition(roundPositions, earliestRound),
+          undefined,
+          'qualifier',
+          `Q${pool.letter}${rank}`,
+        ));
+      });
+    });
+  }
+
+  if (slots.length === 0 && registrations.length > 0) {
+    registrations
+      .map(reg => reg.team)
+      .sort(sortTeamsForDraw)
+      .forEach(team => {
+        slots.push(createEntrySlot(earliestRound, nextPosition(roundPositions, earliestRound), team, 'team'));
+      });
+  }
+
+  return slots.sort(sortSlotsByRound);
+}
+
+function buildDrawColumns(slots: MainDrawSlot[]): DrawColumn[] {
+  if (slots.length === 0) return [];
+
+  const earliestIndex = Math.min(...slots.map(slot => ROUND_ORDER.indexOf(slot.entryRound)));
+  const names = ROUND_ORDER.slice(Math.max(0, earliestIndex));
+  let previousLineCount = 0;
+
+  return names.map((name, columnIndex) => {
+    const entries = slots.filter(slot => slot.entryRound === name).sort((a, b) => a.position - b.position);
+    const advanceCount = columnIndex === 0 ? 0 : Math.max(1, Math.ceil(previousLineCount / 2));
+    const advances = Array.from({ length: advanceCount }, (_, index) => createAdvanceSlot(name, index + 1));
+    previousLineCount = entries.length + advances.length;
+    return { name, entries, advances };
   });
 }
 
-function nextPowerOfTwo(value: number): number {
-  let size = 1;
-  while (size < value) size *= 2;
-  return size;
+function createEntrySlot(
+  entryRound: DrawRoundName,
+  position: number,
+  team: Team | undefined,
+  source: MainDrawSlot['source'],
+  placeholder?: string,
+): MainDrawSlot {
+  return {
+    id: `main-${entryRound.replace('/', '')}-${source}-${position}`,
+    drawId: 'main-draw-local',
+    round: ROUND_ORDER.indexOf(entryRound) + 1,
+    position,
+    entryRound,
+    team,
+    placeholder,
+    source,
+    isBye: false,
+    isLocked: Boolean(team?.seed),
+  };
+}
+
+function createAdvanceSlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
+  return {
+    id: `advance-${entryRound.replace('/', '')}-${position}`,
+    drawId: 'main-draw-local',
+    round: ROUND_ORDER.indexOf(entryRound) + 1,
+    position,
+    entryRound,
+    placeholder: entryRound === 'WINNER' ? 'Winner' : `Winner Match ${position}`,
+    source: 'advance',
+    isBye: false,
+    isLocked: true,
+  };
+}
+
+function nextPosition(positions: Map<DrawRoundName, number>, round: DrawRoundName): number {
+  const position = (positions.get(round) ?? 0) + 1;
+  positions.set(round, position);
+  return position;
+}
+
+function getEarliestRound(entryRounds: DrawRoundName[], pools: Pool[]): DrawRoundName {
+  if (pools.length > 0) return '1/16';
+  if (entryRounds.length === 0) return '1/8';
+  return entryRounds.reduce((earliest, round) => (
+    ROUND_ORDER.indexOf(round) < ROUND_ORDER.indexOf(earliest) ? round : earliest
+  ));
+}
+
+function getDrawEntry(notes?: string): string {
+  const match = notes?.match(/Draw entry:\s*([^|]+)/i);
+  return match?.[1]?.trim().toUpperCase() ?? '';
+}
+
+function normalizeDrawEntry(entry: string): DrawRoundName | undefined {
+  const normalized = entry.trim().toUpperCase();
+  if (normalized === 'MAIN' || normalized === 'DIRECT') return '1/8';
+  if (ROUND_ORDER.includes(normalized as DrawRoundName)) return normalized as DrawRoundName;
+  return undefined;
+}
+
+function sortTeamsForDraw(a: Team, b: Team): number {
+  const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
+  if (seedDiff !== 0) return seedDiff;
+  const rankDiff = (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+  if (rankDiff !== 0) return rankDiff;
+  return a.name.localeCompare(b.name);
+}
+
+function sortSlotsByRound(a: MainDrawSlot, b: MainDrawSlot): number {
+  const roundDiff = ROUND_ORDER.indexOf(a.entryRound) - ROUND_ORDER.indexOf(b.entryRound);
+  if (roundDiff !== 0) return roundDiff;
+  return a.position - b.position;
 }
 
 function DrawSlotRow({
-  slot, isLocked: drawLocked, onSwap, onToggleLock, _onToggleBye: _ob, isDraft
+  slot, isLocked: drawLocked, onSwap, onToggleLock, isDraft
 }: {
-  slot: DrawSlot;
+  slot: MainDrawSlot;
   isLocked: boolean;
   onSwap: () => void;
   onToggleLock: () => void;
-  _onToggleBye: () => void;
   isDraft: boolean;
 }) {
+  const isAdvance = slot.source === 'advance';
+
   return (
     <div className={cn(
-      'flex items-center gap-2 p-2 rounded-xl border transition-all',
+      'flex items-center gap-2 p-2 rounded-xl border transition-all min-h-[58px]',
       slot.isBye ? 'border-yellow-500/30 bg-yellow-500/5' :
-      slot.isLocked ? 'border-mpl-gold/40 bg-mpl-gold/5' :
+      slot.source === 'qualifier' ? 'border-cyan-500/30 bg-cyan-500/5' :
+      slot.isLocked && !isAdvance ? 'border-mpl-gold/40 bg-mpl-gold/5' :
+      isAdvance ? 'border-mpl-border/60 bg-mpl-card/60' :
       !slot.team ? 'border-dashed border-mpl-border' :
       'border-mpl-border bg-mpl-dark'
     )}>
@@ -358,26 +534,35 @@ function DrawSlotRow({
         {slot.position}
       </div>
       {slot.isBye ? (
-        <span className="flex-1 text-xs font-bold text-yellow-400 uppercase tracking-widest">BYE</span>
+        <span className="flex-1 text-xs font-bold text-yellow-400 uppercase tracking-widest">BYE / TBD</span>
       ) : slot.team ? (
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-white truncate">{slot.team.name}</p>
           <p className="text-[10px] text-mpl-gray">{slot.team.clubName}</p>
         </div>
       ) : (
-        <span className="flex-1 text-xs text-mpl-gray italic">Empty</span>
+        <div className="flex-1 min-w-0">
+          <p className={cn(
+            'text-xs font-semibold truncate',
+            slot.source === 'qualifier' ? 'text-cyan-300' :
+            isAdvance ? 'text-mpl-gray' : 'text-mpl-gray'
+          )}>
+            {slot.placeholder ?? 'Empty'}
+          </p>
+          <p className="text-[10px] text-mpl-gray">{slot.source === 'qualifier' ? 'Qualified team' : slot.entryRound}</p>
+        </div>
       )}
-      {isDraft && !drawLocked && (
+      {isDraft && !drawLocked && !isAdvance && (
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={onSwap} className="p-1 rounded text-mpl-gray transition-colors hover:text-mpl-gold">
+          <button onClick={onSwap} className="p-1 rounded text-mpl-gray transition-colors hover:text-mpl-gold" title="Edit slot">
             <Edit3 size={11} />
           </button>
-          <button onClick={onToggleLock} className={cn('p-1 rounded transition-colors', slot.isLocked ? 'text-mpl-gold' : 'text-mpl-gray hover:text-mpl-gold')}>
+          <button onClick={onToggleLock} className={cn('p-1 rounded transition-colors', slot.isLocked ? 'text-mpl-gold' : 'text-mpl-gray hover:text-mpl-gold')} title={slot.isLocked ? 'Unlock slot' : 'Lock slot'}>
             {slot.isLocked ? <Lock size={11} /> : <Unlock size={11} />}
           </button>
         </div>
       )}
-      {slot.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
+      {slot.isLocked && !isAdvance && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
     </div>
   );
 }
