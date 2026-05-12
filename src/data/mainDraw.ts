@@ -87,65 +87,24 @@ export async function fetchPublishedMainDraw(tournamentId: string): Promise<Pers
 }
 
 export async function fetchPublishedMainDrawWithTeams(tournamentId: string): Promise<PersistedMainDrawWithTeams | null> {
-  const event = await fetchTournamentEvent(tournamentId);
-  if (!event) return null;
-
-  const { data: draw, error } = await supabase
-    .from('draws')
-    .select(`
-      id,
-      status,
-      draw_slots(
-        id,
-        round,
-        position,
-        is_bye,
-        is_locked,
-        winner_id,
-        teams(
-          id,
-          name,
-          seed,
-          ranking,
-          clubs(name, short_code)
-        )
-      )
-    `)
-    .eq('tournament_event_id', event.id)
-    .eq('draw_type', 'main_draw')
-    .in('status', ['published', 'locked'])
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
+  const draw = await fetchPublishedMainDraw(tournamentId);
   if (!draw) return null;
 
-  return {
-    drawId: draw.id,
-    status: draw.status,
-    slots: [...(draw.draw_slots ?? [])]
-      .sort((a, b) => (a.round - b.round) || (a.position - b.position))
-      .map(slot => {
-        const team = Array.isArray(slot.teams) ? slot.teams[0] : slot.teams;
-        const club = Array.isArray(team?.clubs) ? team?.clubs[0] : team?.clubs;
+  const teamIds = [...new Set(draw.slots.map(slot => slot.teamId).filter((id): id is string => Boolean(id)))];
+  const teamById = await fetchTeamsById(teamIds);
 
-        return {
-          id: slot.id,
-          round: slot.round,
-          position: slot.position,
-          isBye: slot.is_bye,
-          isLocked: slot.is_locked,
-          winnerId: slot.winner_id ?? null,
-          team: team ? {
-            id: team.id,
-            name: team.name,
-            clubName: club?.short_code || club?.name || '',
-            seed: team.seed ?? undefined,
-            ranking: team.ranking ?? undefined,
-          } : null,
-        };
-      }),
+  return {
+    drawId: draw.drawId,
+    status: draw.status,
+    slots: draw.slots.map(slot => ({
+      id: slot.id,
+      round: slot.round,
+      position: slot.position,
+      isBye: slot.isBye,
+      isLocked: slot.isLocked,
+      winnerId: slot.winnerId,
+      team: slot.teamId ? teamById.get(slot.teamId) ?? null : null,
+    })),
   };
 }
 
@@ -267,6 +226,34 @@ async function fetchExistingMainDrawIds(eventId: string): Promise<string[]> {
 
   if (error) throw error;
   return (data ?? []).map(row => row.id);
+}
+
+async function fetchTeamsById(teamIds: string[]): Promise<Map<string, NonNullable<PersistedMainDrawTeamSlot['team']>>> {
+  if (teamIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('teams')
+    .select(`
+      id,
+      name,
+      seed,
+      ranking,
+      clubs(name, short_code)
+    `)
+    .in('id', teamIds);
+
+  if (error) throw error;
+
+  return new Map((data ?? []).map(row => {
+    const club = Array.isArray(row.clubs) ? row.clubs[0] : row.clubs;
+    return [row.id, {
+      id: row.id,
+      name: row.name,
+      clubName: club?.short_code || club?.name || '',
+      seed: row.seed ?? undefined,
+      ranking: row.ranking ?? undefined,
+    }];
+  }));
 }
 
 async function getCurrentProfileId(): Promise<string | null> {
