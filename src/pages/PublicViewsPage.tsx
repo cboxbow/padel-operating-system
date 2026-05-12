@@ -7,7 +7,7 @@ import { TopBar } from '../components/Navigation';
 import { BackButton, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
 import { fetchPublishedMainDrawWithTeams, type PersistedMainDrawWithTeams } from '../data/mainDraw';
-import type { MatchSet, Pool, Team } from '../types';
+import type { MatchSet, Pool, ScheduledMatch, Team } from '../types';
 
 type PublicMatchLike = { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string; poolId?: string };
 
@@ -68,7 +68,7 @@ export function PublicPoolsPage() {
 
 export function PublicBracketPage() {
   const { navigate, selectedTournament } = useAppState();
-  const { pools } = useTournamentData();
+  const { matches, pools } = useTournamentData();
   const [publishedDraw, setPublishedDraw] = useState<PersistedMainDrawWithTeams | null>(null);
   const [drawLoading, setDrawLoading] = useState(true);
   const [drawError, setDrawError] = useState<string | null>(null);
@@ -77,8 +77,13 @@ export function PublicBracketPage() {
     .filter(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status))
     .sort((a, b) => a.letter.localeCompare(b.letter));
   const hasPublishedPools = selectedTournament?.competitionMode === 'qualification_phase' && tournamentPools.length > 0;
-  const bracketTeams = publishedDraw ? buildPublicBracketTeamsFromDraw(publishedDraw) : [];
-  const bracket = buildPublicBracket(bracketTeams);
+  const publishedDrawMatches = publishedDraw
+    ? matches.filter(match => match.tournamentId === selectedTournament?.id && match.drawId === publishedDraw.drawId)
+    : [];
+  const bracketTeams = publishedDraw && publishedDrawMatches.length === 0 ? buildPublicBracketTeamsFromDraw(publishedDraw) : [];
+  const bracket = publishedDrawMatches.length > 0
+    ? buildPublicBracketFromMatches(publishedDrawMatches)
+    : buildPublicBracket(bracketTeams);
   const firstRoundByes = bracket.rounds[0]?.matches
     .flatMap(match => match.slots)
     .filter(slot => slot.isBye).length ?? 0;
@@ -425,6 +430,67 @@ function buildPublicBracket(entries: PublicSlot[]): { size: number; rounds: Publ
   }
 
   return { size, rounds };
+}
+
+function buildPublicBracketFromMatches(matches: ScheduledMatch[]): { size: number; rounds: PublicRound[] } {
+  if (matches.length === 0) return { size: 0, rounds: [] };
+
+  const roundNumbers = [...new Set(matches.map(match => match.round))].sort((a, b) => a - b);
+  let carriedWinners: Array<Team | undefined> = [];
+  const rounds = roundNumbers.map(roundNumber => {
+    const roundMatches = matches
+      .filter(match => match.round === roundNumber)
+      .sort((a, b) => a.matchNumber - b.matchNumber);
+    const roundName = roundNameFromRoundNumber(roundNumber, roundMatches.length);
+
+    const publicRound = {
+      name: roundName,
+      matches: roundMatches.map((match, index) => ({
+        id: match.id,
+        roundName,
+        matchNumber: index + 1,
+        slots: [
+          createPublicSlotFromMatchTeam(match, 'team1', (index * 2) + 1, carriedWinners[index * 2]),
+          createPublicSlotFromMatchTeam(match, 'team2', (index * 2) + 2, carriedWinners[(index * 2) + 1]),
+        ],
+      })),
+    };
+
+    carriedWinners = roundMatches.map(match => {
+      if (match.winnerId === match.team1?.id) return match.team1;
+      if (match.winnerId === match.team2?.id) return match.team2;
+      return undefined;
+    });
+
+    return publicRound;
+  });
+
+  const openingMatchCount = rounds[0]?.matches.length ?? 0;
+  return { size: openingMatchCount * 2, rounds };
+}
+
+function createPublicSlotFromMatchTeam(match: ScheduledMatch, side: 'team1' | 'team2', position: number, fallbackTeam?: Team): PublicSlot {
+  const team = (side === 'team1' ? match.team1 : match.team2) ?? fallbackTeam;
+  if (!team) {
+    return {
+      id: `public-${match.id}-${side}`,
+      position,
+      label: match.status === 'completed' && match.winnerId ? 'TBD' : 'Awaiting winner',
+      source: 'winner',
+      isBye: false,
+      isLocked: false,
+    };
+  }
+
+  return {
+    ...createPublicTeamSlot(team, position, 'direct'),
+    isLocked: match.winnerId === team.id,
+  };
+}
+
+function roundNameFromRoundNumber(roundNumber: number, matchCount: number): string {
+  if (roundNumber <= 0) return 'Draw';
+  return `1/${Math.max(2, matchCount * 2)}`;
 }
 
 function createPublicTeamSlot(team: Team, position: number, source: PublicSlotSource, label?: string): PublicSlot {

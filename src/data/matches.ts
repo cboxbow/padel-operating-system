@@ -337,6 +337,10 @@ export async function saveMatchScore(
     throw insertError;
   }
 
+  if (winnerId && match.drawId) {
+    await propagateMainDrawWinner(match, winnerId);
+  }
+
   await insertScoreAudit(match, sets, isCorrection, profileId, reason);
 }
 
@@ -394,6 +398,48 @@ function calculateWinnerId(match: ScheduledMatch, sets: MatchSet[]): string | un
   if (t1Sets > t2Sets) return match.team1?.id;
   if (t2Sets > t1Sets) return match.team2?.id;
   return undefined;
+}
+
+interface DrawMatchRow {
+  id: string;
+  round: number;
+  match_number: number;
+  team1_id: string | null;
+  team2_id: string | null;
+}
+
+async function propagateMainDrawWinner(match: ScheduledMatch, winnerId: string): Promise<void> {
+  if (!match.drawId) return;
+
+  const { data, error } = await supabase
+    .from('matches')
+    .select('id, round, match_number, team1_id, team2_id')
+    .eq('draw_id', match.drawId)
+    .order('round', { ascending: true })
+    .order('match_number', { ascending: true });
+
+  if (error) throw error;
+
+  const drawMatches = (data ?? []) as DrawMatchRow[];
+  const currentRoundMatches = drawMatches
+    .filter(row => row.round === match.round)
+    .sort((a, b) => a.match_number - b.match_number);
+  const currentIndex = currentRoundMatches.findIndex(row => row.id === match.id);
+  if (currentIndex < 0) return;
+
+  const nextRoundMatches = drawMatches
+    .filter(row => row.round === match.round + 1)
+    .sort((a, b) => a.match_number - b.match_number);
+  const nextMatch = nextRoundMatches[Math.floor(currentIndex / 2)];
+  if (!nextMatch) return;
+
+  const targetColumn = currentIndex % 2 === 0 ? 'team1_id' : 'team2_id';
+  const { error: updateError } = await supabase
+    .from('matches')
+    .update({ [targetColumn]: winnerId })
+    .eq('id', nextMatch.id);
+
+  if (updateError) throw updateError;
 }
 
 async function insertScoreAudit(

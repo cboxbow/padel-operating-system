@@ -607,6 +607,7 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
     };
 
     setMatches(prev => prev.map(m => (m.id === match.id ? updatedMatch : m)));
+    await refreshMatches();
     addAuditLog({
       action: match.status === 'completed' ? 'SCORE_OVERRIDE' : 'SCORE_ENTERED',
       module: 'Match Score',
@@ -618,7 +619,7 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
       isOverride: match.status === 'completed',
       overrideReason: reason,
     });
-  }, [addAuditLog]);
+  }, [addAuditLog, refreshMatches]);
 
   const generatePoolMatches = useCallback(async (tournamentId: string) => {
     await generatePoolMatchesForTournament(tournamentId);
