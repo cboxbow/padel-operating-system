@@ -103,7 +103,12 @@ export function MainDrawPage() {
   const lockedSlots = editableSlots.filter(s => s.isLocked).length;
   const directSlotCount = editableSlots.filter(s => s.source === 'team').length;
   const qualifierSlots = editableSlots.filter(s => s.source === 'qualifier').length;
-  const pickerTeams = swapTarget?.source === 'qualifier' ? poolTeams : directTeams;
+  const qualifiedTeamOptions = useMemo(() => (
+    Array.from(buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2).values())
+  ), [tournamentMatches, tournamentPools, selectedTournament?.qualifiersPerPool]);
+  const pickerTeams = swapTarget?.source === 'qualifier'
+    ? dedupeTeams([...qualifiedTeamOptions, ...poolTeams])
+    : dedupeTeams([...directTeams, ...qualifiedTeamOptions]);
 
   const handleAutoFillDirect = () => {
     setSlots(prev => {
@@ -200,10 +205,14 @@ export function MainDrawPage() {
   };
 
   const handleToggleLock = (slotId: string) => {
-    setSlots(prev => prev.map(s =>
-      s.id === slotId ? { ...s, isLocked: !s.isLocked } : s
-    ));
-    const slot = slots.find(s => s.id === slotId);
+    const slot = slots.find(s => s.id === slotId) ?? bracketRounds
+      .flatMap(round => round.matches)
+      .flatMap(match => match.slots)
+      .find(s => s.id === slotId);
+
+    if (!slot) return;
+
+    setSlots(prev => upsertMainDrawSlot(prev, { ...slot, isLocked: !slot.isLocked }));
     addToast({ type: 'info', title: slot?.isLocked ? 'Slot Unlocked' : 'Slot Locked' });
   };
 
@@ -222,11 +231,16 @@ export function MainDrawPage() {
       const sourceSlot = prev.find(slot => slot.id === draggedSlotId);
       if (!sourceSlot || sourceSlot.source === 'advance') return prev;
 
-      return prev.map(slot => {
+      const targetExists = prev.some(slot => slot.id === targetSlot.id);
+      const swapped = prev.map(slot => {
         if (slot.id === sourceSlot.id) return moveSlotContent(slot, targetSlot);
         if (slot.id === targetSlot.id) return moveSlotContent(slot, sourceSlot);
         return slot;
       });
+
+      return targetExists
+        ? swapped.sort(sortSlotsByRound)
+        : upsertMainDrawSlot(swapped, moveSlotContent(targetSlot, sourceSlot));
     });
 
     addAuditLog({
@@ -247,11 +261,7 @@ export function MainDrawPage() {
   const handleDrawSlotClear = (slotToClear: MainDrawSlot) => {
     if (drawStatus !== 'draft' || slotToClear.source === 'advance') return;
 
-    setSlots(prev => prev.map(slot => (
-      slot.id === slotToClear.id
-        ? clearEditableSlot(slot)
-        : slot
-    )));
+    setSlots(prev => upsertMainDrawSlot(prev, clearEditableSlot(slotToClear)));
     addAuditLog({
       action: 'MAIN_DRAW_SLOT_CLEARED',
       module: 'Main Draw',
@@ -268,18 +278,20 @@ export function MainDrawPage() {
 
   const handleSwapTeam = (team: Team | 'bye' | null) => {
     if (!swapTarget) return;
-    setSlots(prev => prev.map(s => {
-      if (s.id !== swapTarget.id) return s;
-      if (team === null) return clearEditableSlot(s);
+    setSlots(prev => {
+      const existingTarget = prev.find(slot => slot.id === swapTarget.id) ?? swapTarget;
+      const updatedSlot = team === null
+        ? clearEditableSlot(existingTarget)
+        : {
+            ...existingTarget,
+            team: team === 'bye' ? undefined : team,
+            placeholder: team === 'bye' ? 'BYE' : existingTarget.source === 'qualifier' ? existingTarget.placeholder : undefined,
+            candidateTeam: team === 'bye' ? undefined : existingTarget.candidateTeam,
+            isBye: team === 'bye',
+          };
 
-      return {
-        ...s,
-        team: team === 'bye' ? undefined : team,
-        placeholder: team === 'bye' ? 'BYE' : s.placeholder,
-        candidateTeam: team === 'bye' ? undefined : s.candidateTeam,
-        isBye: team === 'bye',
-      };
-    }));
+      return upsertMainDrawSlot(prev, updatedSlot);
+    });
     setSwapTarget(null);
     setShowSwapPicker(false);
     addAuditLog({
@@ -927,6 +939,24 @@ function sortSlotsByRound(a: MainDrawSlot, b: MainDrawSlot): number {
   const roundDiff = ROUND_ORDER.indexOf(a.entryRound) - ROUND_ORDER.indexOf(b.entryRound);
   if (roundDiff !== 0) return roundDiff;
   return a.position - b.position;
+}
+
+function upsertMainDrawSlot(slots: MainDrawSlot[], nextSlot: MainDrawSlot): MainDrawSlot[] {
+  const exists = slots.some(slot => slot.id === nextSlot.id);
+  const updated = exists
+    ? slots.map(slot => (slot.id === nextSlot.id ? nextSlot : slot))
+    : [...slots, nextSlot];
+
+  return updated.sort(sortSlotsByRound);
+}
+
+function dedupeTeams(teams: Team[]): Team[] {
+  const seen = new Set<string>();
+  return teams.filter(team => {
+    if (seen.has(team.id)) return false;
+    seen.add(team.id);
+    return true;
+  });
 }
 
 function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSlot {
