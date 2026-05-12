@@ -28,6 +28,7 @@ interface BracketMatch {
 }
 
 const ROUND_ORDER: DrawRoundName[] = ['1/32', '1/16', '1/8', '1/4', '1/2', 'FINAL', 'WINNER'];
+const BRACKET_BAND_HEIGHT = 104;
 
 export function MainDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
@@ -350,9 +351,9 @@ export function MainDrawPage() {
               <p className="text-[10px] text-mpl-gray">{byeCount} BYEs</p>
             </div>
             <div className="overflow-x-auto no-scrollbar pb-2">
-              <div className="flex gap-5 min-w-max items-start">
+              <div className="flex gap-3 min-w-max items-start">
                 {bracketRounds.map((round, roundIndex) => (
-                  <div key={round.name} className="w-56 flex-shrink-0">
+                  <div key={round.name} className="w-48 flex-shrink-0">
                     <div className="sticky top-0 z-10 bg-mpl-black pb-2">
                       <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{round.name}</p>
                       <p className="text-[10px] text-mpl-gray">{round.matches.length} matches</p>
@@ -708,7 +709,7 @@ function BracketMatchCard({
   onClear: (slot: MainDrawSlot) => void;
   onDragEnd: () => void;
 }) {
-  const matchBandHeight = 142 * Math.pow(2, roundIndex);
+  const matchBandHeight = BRACKET_BAND_HEIGHT * Math.pow(2, roundIndex);
 
   return (
     <div
@@ -716,17 +717,17 @@ function BracketMatchCard({
       style={{ height: matchBandHeight }}
     >
       {roundIndex > 0 && (
-        <div className="absolute left-[-20px] top-1/2 h-px w-5 bg-mpl-gold/30" />
+        <div className="absolute left-[-12px] top-1/2 h-px w-3 bg-mpl-gold/30" />
       )}
       {!isLastRound && (
-        <div className="absolute right-[-20px] top-1/2 h-px w-5 bg-mpl-gold/30" />
+        <div className="absolute right-[-12px] top-1/2 h-px w-3 bg-mpl-gold/30" />
       )}
-      <div className="w-full mpl-card p-2 relative">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">Match {match.matchNumber}</span>
-          <span className="text-[9px] text-mpl-gold font-bold">{match.roundName}</span>
+      <div className="w-full mpl-card p-1.5 relative rounded-lg">
+        <div className="flex items-center justify-between mb-1 px-1">
+          <span className="text-[8px] text-mpl-gray font-bold uppercase tracking-widest">M{match.matchNumber}</span>
+          <span className="text-[8px] text-mpl-gold font-bold">{match.roundName}</span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {match.slots.map(slot => (
             <DrawSlotRow
               key={slot.id}
@@ -768,7 +769,7 @@ function DrawSlotRow({
 
   return (
     <div className={cn(
-      'flex items-center gap-2 p-2 rounded-xl border transition-all min-h-[58px]',
+      'flex items-center gap-1.5 px-1.5 py-1 rounded-lg border transition-all min-h-[38px]',
       canDrag && 'cursor-grab active:cursor-grabbing',
       isDragging && 'opacity-60 border-mpl-gold',
       slot.isBye ? 'border-yellow-500/30 bg-yellow-500/5' :
@@ -795,39 +796,39 @@ function DrawSlotRow({
       }}
       onDragEnd={onDragEnd}
     >
-      <div className="w-6 h-6 rounded bg-mpl-border flex items-center justify-center text-[10px] font-bold text-mpl-gray flex-shrink-0">
+      <div className="w-5 h-5 rounded bg-mpl-border flex items-center justify-center text-[9px] font-bold text-mpl-gray flex-shrink-0">
         {slot.position}
       </div>
       {slot.isBye ? (
-        <span className="flex-1 text-xs font-bold text-yellow-400 uppercase tracking-widest">BYE / TBD</span>
+        <span className="flex-1 text-[11px] font-bold text-yellow-400 uppercase tracking-widest">BYE / TBD</span>
       ) : slot.team ? (
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-white truncate">{slot.team.name}</p>
-          <p className="text-[10px] text-mpl-gray">{slot.team.clubName}</p>
+          <p className="text-[11px] font-semibold text-white truncate">{slot.team.name}</p>
+          <p className="text-[9px] text-mpl-gray truncate">{slot.team.clubName}</p>
         </div>
       ) : (
         <div className="flex-1 min-w-0">
           <p className={cn(
-            'text-xs font-semibold truncate',
+            'text-[11px] font-semibold truncate',
             slot.source === 'qualifier' ? 'text-cyan-300' :
             isAdvance ? 'text-mpl-gray' : 'text-mpl-gray'
           )}>
             {slot.placeholder ?? 'Empty'}
           </p>
-          <p className="text-[10px] text-mpl-gray">{slot.source === 'qualifier' ? 'Qualified team' : slot.entryRound}</p>
+          <p className="text-[9px] text-mpl-gray">{slot.source === 'qualifier' ? 'Qualified team' : slot.entryRound}</p>
         </div>
       )}
       {isDraft && !drawLocked && !isAdvance && !isDisplayEmpty && (
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={onSwap} className="p-1 rounded text-mpl-gray transition-colors hover:text-mpl-gold" title="Edit slot">
-            <Edit3 size={11} />
+          <button onClick={onSwap} className="p-0.5 rounded text-mpl-gray transition-colors hover:text-mpl-gold" title="Edit slot">
+            <Edit3 size={10} />
           </button>
-          <button onClick={onToggleLock} className={cn('p-1 rounded transition-colors', slot.isLocked ? 'text-mpl-gold' : 'text-mpl-gray hover:text-mpl-gold')} title={slot.isLocked ? 'Unlock slot' : 'Lock slot'}>
-            {slot.isLocked ? <Lock size={11} /> : <Unlock size={11} />}
+          <button onClick={onToggleLock} className={cn('p-0.5 rounded transition-colors', slot.isLocked ? 'text-mpl-gold' : 'text-mpl-gray hover:text-mpl-gold')} title={slot.isLocked ? 'Unlock slot' : 'Lock slot'}>
+            {slot.isLocked ? <Lock size={10} /> : <Unlock size={10} />}
           </button>
         </div>
       )}
-      {slot.isLocked && !isAdvance && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
+      {slot.isLocked && !isAdvance && <Lock size={9} className="text-mpl-gold flex-shrink-0" />}
     </div>
   );
 }
