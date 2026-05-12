@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
   Shuffle, Lock, Unlock, Globe, Edit3, Plus
 } from 'lucide-react';
@@ -50,6 +50,7 @@ export function MainDrawPage() {
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [swapTarget, setSwapTarget] = useState<MainDrawSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
+  const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
 
   const teamSignature = tournamentRegistrations
     .map(reg => `${reg.id}:${reg.team.id}:${reg.team.seed ?? ''}:${reg.team.ranking ?? ''}:${getDrawEntry(reg.notes)}`)
@@ -129,6 +130,38 @@ export function MainDrawPage() {
   const handleSlotSwap = (slot: MainDrawSlot) => {
     setSwapTarget(slot);
     setShowSwapPicker(true);
+  };
+
+  const handleDrawSlotDrop = (targetSlot: MainDrawSlot) => {
+    if (!draggedSlotId || draggedSlotId === targetSlot.id || targetSlot.source === 'advance') {
+      setDraggedSlotId(null);
+      return;
+    }
+
+    setSlots(prev => {
+      const sourceSlot = prev.find(slot => slot.id === draggedSlotId);
+      if (!sourceSlot || sourceSlot.source === 'advance') return prev;
+
+      return prev.map(slot => {
+        if (slot.id === sourceSlot.id) return moveSlotContent(slot, targetSlot);
+        if (slot.id === targetSlot.id) return moveSlotContent(slot, sourceSlot);
+        return slot;
+      });
+    });
+
+    addAuditLog({
+      action: 'MAIN_DRAW_SLOT_DRAG_SWAP',
+      module: 'Main Draw',
+      entityType: 'draw',
+      entityId: 'main-draw-local',
+      description: `Main draw slot ${draggedSlotId} swapped with ${targetSlot.id}.`,
+      adminId: 'adm1',
+      adminName: 'Admin MPL',
+      isOverride: true,
+      overrideReason: 'Manual drag-and-drop slot movement.',
+    });
+    addToast({ type: 'info', title: 'Slots Moved', message: 'Main draw placement updated.' });
+    setDraggedSlotId(null);
   };
 
   const handleSwapTeam = (team: Team | 'bye' | null) => {
@@ -292,6 +325,10 @@ export function MainDrawPage() {
                           isLocked={drawStatus === 'locked'}
                           onSwap={() => handleSlotSwap(slot)}
                           onToggleLock={() => handleToggleLock(slot.id)}
+                          onDragStart={() => setDraggedSlotId(slot.id)}
+                          onDrop={() => handleDrawSlotDrop(slot)}
+                          onDragEnd={() => setDraggedSlotId(null)}
+                          isDragging={draggedSlotId === slot.id}
                           isDraft={drawStatus === 'draft'}
                         />
                       ))}
@@ -509,27 +546,59 @@ function sortSlotsByRound(a: MainDrawSlot, b: MainDrawSlot): number {
   return a.position - b.position;
 }
 
+function moveSlotContent(target: MainDrawSlot, source: MainDrawSlot): MainDrawSlot {
+  return {
+    ...target,
+    team: source.team,
+    placeholder: source.placeholder,
+    source: source.source === 'advance' ? target.source : source.source,
+    isBye: source.isBye,
+    isLocked: source.isLocked,
+  };
+}
+
 function DrawSlotRow({
-  slot, isLocked: drawLocked, onSwap, onToggleLock, isDraft
+  slot, isLocked: drawLocked, onSwap, onToggleLock, onDragStart, onDrop, onDragEnd, isDragging, isDraft
 }: {
   slot: MainDrawSlot;
   isLocked: boolean;
   onSwap: () => void;
   onToggleLock: () => void;
+  onDragStart: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
   isDraft: boolean;
 }) {
   const isAdvance = slot.source === 'advance';
+  const canDrag = isDraft && !drawLocked && !isAdvance;
 
   return (
     <div className={cn(
       'flex items-center gap-2 p-2 rounded-xl border transition-all min-h-[58px]',
+      canDrag && 'cursor-grab active:cursor-grabbing',
+      isDragging && 'opacity-60 border-mpl-gold',
       slot.isBye ? 'border-yellow-500/30 bg-yellow-500/5' :
       slot.source === 'qualifier' ? 'border-cyan-500/30 bg-cyan-500/5' :
       slot.isLocked && !isAdvance ? 'border-mpl-gold/40 bg-mpl-gold/5' :
       isAdvance ? 'border-mpl-border/60 bg-mpl-card/60' :
       !slot.team ? 'border-dashed border-mpl-border' :
       'border-mpl-border bg-mpl-dark'
-    )}>
+    )}
+      draggable={canDrag}
+      onDragStart={(event: DragEvent<HTMLDivElement>) => {
+        event.dataTransfer.effectAllowed = 'move';
+        onDragStart();
+      }}
+      onDragOver={(event: DragEvent<HTMLDivElement>) => {
+        if (canDrag) event.preventDefault();
+      }}
+      onDrop={(event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
+    >
       <div className="w-6 h-6 rounded bg-mpl-border flex items-center justify-center text-[10px] font-bold text-mpl-gray flex-shrink-0">
         {slot.position}
       </div>

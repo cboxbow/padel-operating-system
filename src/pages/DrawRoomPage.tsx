@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import {
   Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus
 } from 'lucide-react';
@@ -126,6 +126,7 @@ export function PoolDrawPage() {
   // showOverrideDialog reserved for future override flow
   const [slotToSwap, setSlotToSwap] = useState<PoolSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
+  const [draggedSlotPosition, setDraggedSlotPosition] = useState<number | null>(null);
   const [publishNote] = useState('');
 
   const tournamentPools = pools.filter(p => p.tournamentId === selectedTournament?.id);
@@ -208,6 +209,44 @@ export function PoolDrawPage() {
         title: 'Slot Add Failed',
         message: error instanceof Error ? error.message : 'Unable to add slot.',
       });
+    }
+  };
+
+  const handlePoolSlotDrop = async (targetSlot: PoolSlot) => {
+    if (!pool || draggedSlotPosition === null || draggedSlotPosition === targetSlot.position) {
+      setDraggedSlotPosition(null);
+      return;
+    }
+
+    const sourceSlot = pool.slots.find(slot => slot.position === draggedSlotPosition);
+    if (!sourceSlot) {
+      setDraggedSlotPosition(null);
+      return;
+    }
+
+    try {
+      await updatePoolSlot(pool.id, sourceSlot.position, targetSlot.team);
+      await updatePoolSlot(pool.id, targetSlot.position, sourceSlot.team);
+      addAuditLog({
+        action: 'POOL_SLOT_DRAG_SWAP',
+        module: 'Pool Draw',
+        entityType: 'pool',
+        entityId: pool.id,
+        description: `${pool.name}: slot ${sourceSlot.position} swapped with slot ${targetSlot.position}.`,
+        adminId: 'adm1',
+        adminName: 'Admin MPL',
+        isOverride: true,
+        overrideReason: 'Manual drag-and-drop slot movement.',
+      });
+      addToast({ type: 'info', title: 'Slots Moved', message: `${pool.name} slots updated.` });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Move Failed',
+        message: error instanceof Error ? error.message : 'Unable to move pool slot.',
+      });
+    } finally {
+      setDraggedSlotPosition(null);
     }
   };
 
@@ -307,8 +346,23 @@ export function PoolDrawPage() {
                   {pool.slots.map(slot => (
                     <div
                       key={slot.id}
+                      draggable={pool.status === 'draft'}
+                      onDragStart={(event: DragEvent<HTMLDivElement>) => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        setDraggedSlotPosition(slot.position);
+                      }}
+                      onDragOver={(event: DragEvent<HTMLDivElement>) => {
+                        if (pool.status === 'draft') event.preventDefault();
+                      }}
+                      onDrop={(event: DragEvent<HTMLDivElement>) => {
+                        event.preventDefault();
+                        void handlePoolSlotDrop(slot);
+                      }}
+                      onDragEnd={() => setDraggedSlotPosition(null)}
                       className={cn(
                         'rounded-xl border transition-all duration-200',
+                        pool.status === 'draft' && 'cursor-grab active:cursor-grabbing',
+                        draggedSlotPosition === slot.position && 'opacity-60 border-mpl-gold',
                         slot.isEmpty ? 'border-dashed border-mpl-border bg-transparent' :
                         slot.isLocked ? 'border-mpl-gold/50 bg-mpl-gold/5' :
                         'border-mpl-border bg-mpl-dark'
