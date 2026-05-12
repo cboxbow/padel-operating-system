@@ -26,6 +26,28 @@ export interface PersistedMainDraw {
   slots: PersistedMainDrawSlot[];
 }
 
+export interface PersistedMainDrawTeamSlot {
+  id: string;
+  round: number;
+  position: number;
+  isBye: boolean;
+  isLocked: boolean;
+  winnerId: string | null;
+  team: {
+    id: string;
+    name: string;
+    clubName: string;
+    seed?: number;
+    ranking?: number;
+  } | null;
+}
+
+export interface PersistedMainDrawWithTeams {
+  drawId: string;
+  status: 'draft' | 'published' | 'locked';
+  slots: PersistedMainDrawTeamSlot[];
+}
+
 export async function fetchPublishedMainDraw(tournamentId: string): Promise<PersistedMainDraw | null> {
   const event = await fetchTournamentEvent(tournamentId);
   if (!event) return null;
@@ -61,6 +83,69 @@ export async function fetchPublishedMainDraw(tournamentId: string): Promise<Pers
         isLocked: slot.is_locked,
         winnerId: slot.winner_id ?? null,
       })),
+  };
+}
+
+export async function fetchPublishedMainDrawWithTeams(tournamentId: string): Promise<PersistedMainDrawWithTeams | null> {
+  const event = await fetchTournamentEvent(tournamentId);
+  if (!event) return null;
+
+  const { data: draw, error } = await supabase
+    .from('draws')
+    .select(`
+      id,
+      status,
+      draw_slots(
+        id,
+        round,
+        position,
+        is_bye,
+        is_locked,
+        winner_id,
+        teams(
+          id,
+          name,
+          seed,
+          ranking,
+          clubs(name, short_code)
+        )
+      )
+    `)
+    .eq('tournament_event_id', event.id)
+    .eq('draw_type', 'main_draw')
+    .in('status', ['published', 'locked'])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!draw) return null;
+
+  return {
+    drawId: draw.id,
+    status: draw.status,
+    slots: [...(draw.draw_slots ?? [])]
+      .sort((a, b) => (a.round - b.round) || (a.position - b.position))
+      .map(slot => {
+        const team = Array.isArray(slot.teams) ? slot.teams[0] : slot.teams;
+        const club = Array.isArray(team?.clubs) ? team?.clubs[0] : team?.clubs;
+
+        return {
+          id: slot.id,
+          round: slot.round,
+          position: slot.position,
+          isBye: slot.is_bye,
+          isLocked: slot.is_locked,
+          winnerId: slot.winner_id ?? null,
+          team: team ? {
+            id: team.id,
+            name: team.name,
+            clubName: club?.short_code || club?.name || '',
+            seed: team.seed ?? undefined,
+            ranking: team.ranking ?? undefined,
+          } : null,
+        };
+      }),
   };
 }
 

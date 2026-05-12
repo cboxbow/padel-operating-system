@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   Trophy, Users, ChevronRight, Globe, Lock
 } from 'lucide-react';
@@ -5,7 +6,8 @@ import { useAppState, useTournamentData } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import type { CompetitionMode, MatchSet, Pool, Registration, Team } from '../types';
+import { fetchPublishedMainDrawWithTeams, type PersistedMainDrawWithTeams } from '../data/mainDraw';
+import type { MatchSet, Pool, Team } from '../types';
 
 type PublicMatchLike = { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string; poolId?: string };
 
@@ -66,26 +68,48 @@ export function PublicPoolsPage() {
 
 export function PublicBracketPage() {
   const { navigate, selectedTournament } = useAppState();
-  const { registrations, matches, pools } = useTournamentData();
+  const { pools } = useTournamentData();
+  const [publishedDraw, setPublishedDraw] = useState<PersistedMainDrawWithTeams | null>(null);
+  const [drawLoading, setDrawLoading] = useState(true);
+  const [drawError, setDrawError] = useState<string | null>(null);
 
-  const tournamentRegistrations = registrations
-    .filter(reg => reg.tournamentId === selectedTournament?.id && reg.status === 'validated');
   const tournamentPools = pools
     .filter(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status))
     .sort((a, b) => a.letter.localeCompare(b.letter));
-  const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id);
   const hasPublishedPools = selectedTournament?.competitionMode === 'qualification_phase' && tournamentPools.length > 0;
-  const bracketTeams = buildPublicBracketTeams(
-    tournamentRegistrations,
-    tournamentPools,
-    tournamentMatches,
-    selectedTournament?.competitionMode,
-    selectedTournament?.qualifiersPerPool ?? 2,
-  );
+  const bracketTeams = publishedDraw ? buildPublicBracketTeamsFromDraw(publishedDraw) : [];
   const bracket = buildPublicBracket(bracketTeams);
   const firstRoundByes = bracket.rounds[0]?.matches
     .flatMap(match => match.slots)
     .filter(slot => slot.isBye).length ?? 0;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublishedDraw() {
+      if (!selectedTournament) return;
+      setDrawLoading(true);
+      setDrawError(null);
+
+      try {
+        const draw = await fetchPublishedMainDrawWithTeams(selectedTournament.id);
+        if (!cancelled) setPublishedDraw(draw);
+      } catch (error) {
+        if (!cancelled) {
+          setPublishedDraw(null);
+          setDrawError(error instanceof Error ? error.message : 'Unable to load public draw.');
+        }
+      } finally {
+        if (!cancelled) setDrawLoading(false);
+      }
+    }
+
+    void loadPublishedDraw();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTournament?.id]);
 
   return (
     <div className="flex flex-col h-full">
@@ -118,14 +142,19 @@ export function PublicBracketPage() {
             </button>
           )}
 
-          {bracketTeams.length === 0 ? (
+          {drawLoading ? (
             <div className="mpl-card p-4 text-center">
-              <p className="text-sm font-semibold text-white">No main draw entries yet</p>
-              <p className="text-xs text-mpl-gray mt-1">
-                {selectedTournament?.competitionMode === 'qualification_phase'
-                  ? 'Complete pool matches to qualify teams, or add direct main draw entries.'
-                  : 'The bracket will populate when teams are validated.'}
-              </p>
+              <p className="text-sm font-semibold text-white">Loading public draw...</p>
+            </div>
+          ) : drawError ? (
+            <div className="mpl-card p-4 text-center border-red-500/30">
+              <p className="text-sm font-semibold text-red-400">Public draw unavailable</p>
+              <p className="text-xs text-mpl-gray mt-1">{drawError}</p>
+            </div>
+          ) : !publishedDraw ? (
+            <div className="mpl-card p-4 text-center">
+              <p className="text-sm font-semibold text-white">Main draw not published yet</p>
+              <p className="text-xs text-mpl-gray mt-1">The public bracket will appear here after the admin publishes the main draw.</p>
             </div>
           ) : (
             <>
@@ -339,39 +368,31 @@ interface PublicRound {
   matches: PublicMatch[];
 }
 
-function buildPublicBracketTeams(
-  registrations: Registration[],
-  pools: Pool[],
-  matches: PublicMatchLike[],
-  competitionMode?: CompetitionMode,
-  qualifiersPerPool = 2,
-): PublicSlot[] {
-  const directTeams = registrations
-    .filter(reg => competitionMode !== 'qualification_phase' || getDrawEntry(reg.notes) !== 'QUALIF')
-    .map(reg => reg.team)
-    .sort(compareTeamsForDraw)
-    .map((team, index) => createPublicTeamSlot(team, index + 1, 'direct'));
+function buildPublicBracketTeamsFromDraw(draw: PersistedMainDrawWithTeams): PublicSlot[] {
+  return draw.slots
+    .filter(slot => slot.round === 2 || slot.round === 1)
+    .sort((a, b) => (a.round - b.round) || (a.position - b.position))
+    .map(slot => {
+      if (slot.isBye) return createPublicByeSlot(slot.position);
+      if (!slot.team) {
+        return {
+          id: `public-empty-${slot.id}`,
+          position: slot.position,
+          label: 'TBD',
+          source: 'bye',
+          isBye: true,
+          isLocked: slot.isLocked,
+        };
+      }
 
-  if (competitionMode !== 'qualification_phase') {
-    return directTeams;
-  }
-
-  const qualified = pools.flatMap(pool => (
-    isPoolComplete(pool, matches.filter(match => match.poolId === pool.id))
-      ? calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
-      .slice(0, normalizeQualifiersPerPool(qualifiersPerPool))
-      .map((standing, index) => ({
-        team: standing.team,
-        label: `Q${pool.letter}${index + 1}`,
-      }))
-      : []
-  ));
-  const directIds = new Set(directTeams.map(slot => slot.team?.id));
-  const qualifiedSlots = qualified
-    .filter(item => !directIds.has(item.team.id))
-    .map((item, index) => createPublicTeamSlot(item.team, directTeams.length + index + 1, 'qualified', item.label));
-
-  return [...directTeams, ...qualifiedSlots];
+      return createPublicTeamSlot({
+        id: slot.team.id,
+        name: slot.team.name,
+        clubName: slot.team.clubName,
+        seed: slot.team.seed,
+        ranking: slot.team.ranking,
+      } as Team, slot.position, 'direct');
+    });
 }
 
 function buildPublicBracket(entries: PublicSlot[]): { size: number; rounds: PublicRound[] } {
@@ -448,20 +469,6 @@ function getPublicByeWinner(match: PublicMatch): PublicSlot | undefined {
   return undefined;
 }
 
-function expectedPoolMatchCount(pool: Pool): number {
-  const teamCount = pool.slots.filter(slot => slot.team).length;
-  return (teamCount * (teamCount - 1)) / 2;
-}
-
-function completedPoolMatchCount(matches: PublicMatchLike[]): number {
-  return matches.filter(match => match.status === 'completed').length;
-}
-
-function isPoolComplete(pool: Pool, matches: PublicMatchLike[]): boolean {
-  const expected = expectedPoolMatchCount(pool);
-  return expected > 0 && matches.length >= expected && completedPoolMatchCount(matches) >= expected;
-}
-
 function calculatePoolStandings(pool: Pool, matches: PublicMatchLike[]) {
   const rows = pool.slots
     .filter(slot => slot.team)
@@ -509,21 +516,12 @@ function calculatePoolStandings(pool: Pool, matches: PublicMatchLike[]) {
   });
 }
 
-function getDrawEntry(notes?: string): string {
-  const match = notes?.match(/Draw entry:\s*([^|]+)/i);
-  return match?.[1]?.trim().toUpperCase() ?? '';
-}
-
 function compareTeamsForDraw(a: Team, b: Team): number {
   const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
   if (seedDiff !== 0) return seedDiff;
   const rankingDiff = (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
   if (rankingDiff !== 0) return rankingDiff;
   return a.name.localeCompare(b.name);
-}
-
-function normalizeQualifiersPerPool(value: number): number {
-  return Math.max(1, Math.min(4, Math.floor(value) || 2));
 }
 
 function nextPowerOfTwo(value: number) {
