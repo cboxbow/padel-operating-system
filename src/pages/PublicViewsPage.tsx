@@ -5,7 +5,9 @@ import { useAppState, useTournamentData } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import type { MatchSet, Pool, Team } from '../types';
+import type { CompetitionMode, MatchSet, Pool, Registration, Team } from '../types';
+
+type PublicMatchLike = { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string; poolId?: string };
 
 export function PublicPoolsPage() {
   const { navigate, selectedTournament } = useAppState();
@@ -66,17 +68,24 @@ export function PublicBracketPage() {
   const { navigate, selectedTournament } = useAppState();
   const { registrations, matches, pools } = useTournamentData();
 
-  const teams = registrations
-    .filter(reg => reg.tournamentId === selectedTournament?.id && reg.status === 'validated')
-    .map(reg => reg.team)
-    .sort(compareTeamsForDraw);
-  const slots = buildPublicMainDrawSlots(teams);
-  const matchPairs: { slotA: PublicSlot; slotB?: PublicSlot }[] = [];
-  for (let i = 0; i < slots.length; i += 2) {
-    matchPairs.push({ slotA: slots[i], slotB: slots[i + 1] });
-  }
-  const publishedPools = pools.some(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status));
+  const tournamentRegistrations = registrations
+    .filter(reg => reg.tournamentId === selectedTournament?.id && reg.status === 'validated');
+  const tournamentPools = pools
+    .filter(pool => pool.tournamentId === selectedTournament?.id && ['published', 'locked'].includes(pool.status))
+    .sort((a, b) => a.letter.localeCompare(b.letter));
   const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id);
+  const hasPublishedPools = selectedTournament?.competitionMode === 'qualification_phase' && tournamentPools.length > 0;
+  const bracketTeams = buildPublicBracketTeams(
+    tournamentRegistrations,
+    tournamentPools,
+    tournamentMatches,
+    selectedTournament?.competitionMode,
+    selectedTournament?.qualifiersPerPool ?? 2,
+  );
+  const bracket = buildPublicBracket(bracketTeams);
+  const firstRoundByes = bracket.rounds[0]?.matches
+    .flatMap(match => match.slots)
+    .filter(slot => slot.isBye).length ?? 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -93,67 +102,114 @@ export function PublicBracketPage() {
       />
       <div className="flex-1 overflow-y-auto">
         <div className="pb-24 px-4 pt-4">
-          <PublicHeader title={selectedTournament?.name ?? 'MPL'} subtitle={`${selectedTournament?.venue ?? 'Official'} · ${selectedTournament?.competitionMode === 'qualification_phase' ? 'Qualifs + Main Draw' : 'Main Draw Direct'}`} />
+          <PublicHeader
+            title={selectedTournament?.name ?? 'MPL'}
+            subtitle={`${selectedTournament?.venue ?? 'Official'} - ${selectedTournament?.competitionMode === 'qualification_phase' ? 'Qualifs + Main Draw' : 'Main Draw Direct'}`}
+          />
 
-          {publishedPools && (
-            <button onClick={() => navigate('public_pools', selectedTournament?.id)}
-              className="w-full mpl-card p-3 flex items-center gap-3 mb-4 hover:border-mpl-gold/30 transition-all">
+          {hasPublishedPools && (
+            <button
+              onClick={() => navigate('public_pools', selectedTournament?.id)}
+              className="w-full mpl-card p-3 flex items-center gap-3 mb-4 hover:border-mpl-gold/30 transition-all"
+            >
               <Users size={16} className="text-mpl-gold" />
               <span className="text-sm text-mpl-off-white flex-1 text-left">View Pool Draw & Standings</span>
               <ChevronRight size={14} className="text-mpl-gray" />
             </button>
           )}
 
-          {teams.length === 0 ? (
+          {bracketTeams.length === 0 ? (
             <div className="mpl-card p-4 text-center">
-              <p className="text-sm font-semibold text-white">No validated teams yet</p>
-              <p className="text-xs text-mpl-gray mt-1">The bracket will populate when teams are validated.</p>
+              <p className="text-sm font-semibold text-white">No main draw entries yet</p>
+              <p className="text-xs text-mpl-gray mt-1">
+                {selectedTournament?.competitionMode === 'qualification_phase'
+                  ? 'Complete pool matches to qualify teams, or add direct main draw entries.'
+                  : 'The bracket will populate when teams are validated.'}
+              </p>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-2 mb-4">
-                <MiniStat label="Teams" value={teams.length} />
-                <MiniStat label="Slots" value={slots.length} />
-                <MiniStat label="Matches" value={tournamentMatches.length || matchPairs.length} />
+                <MiniStat label="Entries" value={bracketTeams.length} />
+                <MiniStat label="Slots" value={bracket.size} />
+                <MiniStat label="BYEs" value={firstRoundByes} />
               </div>
-              <p className="section-title">Round of {slots.length}</p>
-              <div className="space-y-3">
-                {matchPairs.map(({ slotA, slotB }, i) => (
-                  <div key={slotA.id} className="mpl-card overflow-hidden">
-                    <div className="px-4 py-2 bg-mpl-dark border-b border-mpl-border">
-                      <p className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">Match {i + 1}</p>
-                    </div>
-                    {[slotA, slotB].filter((slot): slot is PublicSlot => Boolean(slot)).map((slot, si) => (
-                      <div key={slot.id} className={cn(
-                        'flex items-center gap-3 px-4 py-3',
-                        si === 0 ? 'border-b border-mpl-border/50' : '',
-                        slot.isBye ? 'bg-yellow-500/5' : ''
-                      )}>
-                        {slot.isBye ? (
-                          <span className="text-xs text-yellow-400 font-bold uppercase tracking-widest w-full">BYE</span>
-                        ) : (
-                          <>
-                            {slot.team?.seed && (
-                              <span className="text-[9px] bg-gold-gradient text-mpl-black font-black px-1.5 py-0.5 rounded flex-shrink-0">
-                                #{slot.team.seed}
-                              </span>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-white truncate">{slot.team?.name ?? 'TBD'}</p>
-                              <p className="text-[10px] text-mpl-gray">{slot.team?.clubName ?? ''}</p>
-                            </div>
-                            {slot.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
-                          </>
-                        )}
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <p className="section-title mb-0">Official Bracket</p>
+                <p className="text-[10px] text-mpl-gray">{Math.max(0, bracket.size - 1)} matches</p>
+              </div>
+              <div className="overflow-x-auto no-scrollbar pb-3">
+                <div className="flex gap-3 min-w-max items-start">
+                  {bracket.rounds.map(round => (
+                    <div key={round.name} className="w-56 flex-shrink-0">
+                      <div className="sticky top-0 z-10 bg-mpl-black pb-2">
+                        <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{round.name}</p>
+                        <p className="text-[10px] text-mpl-gray">{round.matches.length} matches</p>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                      <div className="space-y-3">
+                        {round.matches.map(match => (
+                          <PublicMatchCard key={match.id} match={match} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+              {selectedTournament?.competitionMode === 'qualification_phase' && (
+                <div className="mt-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+                  <p className="text-xs font-bold text-cyan-300">Qualified entries are calculated from pool standings.</p>
+                  <p className="text-[11px] text-mpl-gray mt-1">Top {selectedTournament.qualifiersPerPool} per published pool feed this bracket.</p>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PublicMatchCard({ match }: { match: PublicMatch }) {
+  return (
+    <div className="mpl-card overflow-hidden rounded-lg">
+      <div className="px-3 py-2 bg-mpl-dark border-b border-mpl-border flex items-center justify-between">
+        <p className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">M{match.matchNumber}</p>
+        <p className="text-[9px] text-mpl-gold font-bold">{match.roundName}</p>
+      </div>
+      {match.slots.map((slot, index) => (
+        <div
+          key={slot.id}
+          className={cn(
+            'min-h-[46px] flex items-center gap-2 px-3 py-2 border-b border-mpl-border/40 last:border-0',
+            slot.isBye ? 'bg-yellow-500/5' : slot.source === 'qualified' ? 'bg-cyan-500/5' : ''
+          )}
+        >
+          <div className={cn(
+            'w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0',
+            slot.isBye ? 'bg-yellow-500/15 text-yellow-400' :
+            slot.source === 'winner' ? 'bg-mpl-border text-mpl-gray' :
+            slot.source === 'qualified' ? 'bg-cyan-500/15 text-cyan-300' :
+            slot.team?.seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
+          )}>
+            {slot.isBye ? 'BYE' : slot.team?.seed ? `#${slot.team.seed}` : slot.source === 'qualified' ? 'Q' : slot.position}
+          </div>
+          {slot.team ? (
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-bold text-white truncate">{slot.team.name}</p>
+              <p className="text-[10px] text-mpl-gray truncate">{slot.team.clubName}</p>
+            </div>
+          ) : (
+            <div className="flex-1 min-w-0">
+              <p className={cn('text-[12px] font-bold truncate', slot.isBye ? 'text-yellow-400' : 'text-mpl-gray')}>
+                {slot.label}
+              </p>
+              <p className="text-[10px] text-mpl-gray">{slot.source === 'winner' ? 'Advances here' : match.roundName}</p>
+            </div>
+          )}
+          {index === 0 && match.slots.length > 1 && <span className="text-[10px] text-mpl-gray">vs</span>}
+          {slot.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
+        </div>
+      ))}
     </div>
   );
 }
@@ -208,7 +264,7 @@ function PoolStandings({
   qualifiersPerPool,
 }: {
   pool: Pool;
-  matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[];
+  matches: PublicMatchLike[];
   qualifiersPerPool: number;
 }) {
   const standings = calculatePoolStandings(pool, matches);
@@ -259,30 +315,138 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+type PublicSlotSource = 'direct' | 'qualified' | 'bye' | 'winner';
+
 interface PublicSlot {
   id: string;
   position: number;
+  label: string;
   team?: Team;
+  source: PublicSlotSource;
   isBye: boolean;
   isLocked: boolean;
 }
 
-function buildPublicMainDrawSlots(teams: Team[]): PublicSlot[] {
-  if (teams.length === 0) return [];
-  const bracketSize = nextPowerOfTwo(Math.max(2, teams.length));
-  return Array.from({ length: bracketSize }, (_, index) => {
-    const team = teams[index];
-    return {
-      id: `public-main-slot-${index + 1}`,
-      position: index + 1,
-      team,
-      isBye: !team,
-      isLocked: Boolean(team?.seed),
-    };
-  });
+interface PublicMatch {
+  id: string;
+  roundName: string;
+  matchNumber: number;
+  slots: PublicSlot[];
 }
 
-function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Team; winnerId?: string; sets: MatchSet[]; status: string }[]) {
+interface PublicRound {
+  name: string;
+  matches: PublicMatch[];
+}
+
+function buildPublicBracketTeams(
+  registrations: Registration[],
+  pools: Pool[],
+  matches: PublicMatchLike[],
+  competitionMode?: CompetitionMode,
+  qualifiersPerPool = 2,
+): PublicSlot[] {
+  const directTeams = registrations
+    .filter(reg => competitionMode !== 'qualification_phase' || getDrawEntry(reg.notes) !== 'QUALIF')
+    .map(reg => reg.team)
+    .sort(compareTeamsForDraw)
+    .map((team, index) => createPublicTeamSlot(team, index + 1, 'direct'));
+
+  if (competitionMode !== 'qualification_phase') {
+    return directTeams;
+  }
+
+  const qualified = pools.flatMap(pool => (
+    calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
+      .slice(0, normalizeQualifiersPerPool(qualifiersPerPool))
+      .map((standing, index) => ({
+        team: standing.team,
+        label: `Q${pool.letter}${index + 1}`,
+      }))
+  ));
+  const directIds = new Set(directTeams.map(slot => slot.team?.id));
+  const qualifiedSlots = qualified
+    .filter(item => !directIds.has(item.team.id))
+    .map((item, index) => createPublicTeamSlot(item.team, directTeams.length + index + 1, 'qualified', item.label));
+
+  return [...directTeams, ...qualifiedSlots];
+}
+
+function buildPublicBracket(entries: PublicSlot[]): { size: number; rounds: PublicRound[] } {
+  if (entries.length === 0) return { size: 0, rounds: [] };
+
+  const size = nextPowerOfTwo(Math.max(2, entries.length));
+  const openingSlots = Array.from({ length: size }, (_, index) => (
+    entries[index] ?? createPublicByeSlot(index + 1)
+  ));
+  const rounds: PublicRound[] = [];
+  let carriedSlots: PublicSlot[] = [];
+  let currentRoundSize = size;
+
+  while (currentRoundSize >= 2) {
+    const roundName = `1/${currentRoundSize}`;
+    const sourceSlots = rounds.length === 0 ? openingSlots : carriedSlots;
+    const matches = chunkSlots(sourceSlots, 2).map((slots, index) => ({
+      id: `public-${roundName}-${index + 1}`,
+      roundName,
+      matchNumber: index + 1,
+      slots,
+    }));
+
+    rounds.push({ name: roundName, matches });
+    carriedSlots = matches.map((match, index) => {
+      const autoWinner = getPublicByeWinner(match);
+      return autoWinner ?? createPublicWinnerSlot(roundName, match.matchNumber, index + 1);
+    });
+    currentRoundSize /= 2;
+  }
+
+  return { size, rounds };
+}
+
+function createPublicTeamSlot(team: Team, position: number, source: PublicSlotSource, label?: string): PublicSlot {
+  return {
+    id: `public-${source}-${team.id}-${position}`,
+    position,
+    label: label ?? team.name,
+    team,
+    source,
+    isBye: false,
+    isLocked: Boolean(team.seed),
+  };
+}
+
+function createPublicByeSlot(position: number): PublicSlot {
+  return {
+    id: `public-bye-${position}`,
+    position,
+    label: 'BYE / TBD',
+    source: 'bye',
+    isBye: true,
+    isLocked: false,
+  };
+}
+
+function createPublicWinnerSlot(roundName: string, matchNumber: number, position: number): PublicSlot {
+  return {
+    id: `public-winner-${roundName}-${matchNumber}-${position}`,
+    position,
+    label: `Winner ${roundName} M${matchNumber}`,
+    source: 'winner',
+    isBye: false,
+    isLocked: true,
+  };
+}
+
+function getPublicByeWinner(match: PublicMatch): PublicSlot | undefined {
+  if (match.slots.length !== 2) return undefined;
+  const [first, second] = match.slots;
+  if (first.isBye && !second.isBye) return { ...second, position: match.matchNumber };
+  if (second.isBye && !first.isBye) return { ...first, position: match.matchNumber };
+  return undefined;
+}
+
+function calculatePoolStandings(pool: Pool, matches: PublicMatchLike[]) {
   const rows = pool.slots
     .filter(slot => slot.team)
     .map(slot => ({
@@ -291,6 +455,7 @@ function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Tea
       losses: 0,
       gamesWon: 0,
       gamesLost: 0,
+      initialPosition: slot.position,
     }));
 
   const byTeamId = new Map(rows.map(row => [row.team.id, row]));
@@ -322,18 +487,39 @@ function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Tea
     if (winDiff !== 0) return winDiff;
     const gameDiff = (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost);
     if (gameDiff !== 0) return gameDiff;
-    return compareTeamsForDraw(a.team, b.team);
+    const teamDiff = compareTeamsForDraw(a.team, b.team);
+    if (teamDiff !== 0) return teamDiff;
+    return a.initialPosition - b.initialPosition;
   });
+}
+
+function getDrawEntry(notes?: string): string {
+  const match = notes?.match(/Draw entry:\s*([^|]+)/i);
+  return match?.[1]?.trim().toUpperCase() ?? '';
 }
 
 function compareTeamsForDraw(a: Team, b: Team): number {
   const seedDiff = (a.seed ?? Number.MAX_SAFE_INTEGER) - (b.seed ?? Number.MAX_SAFE_INTEGER);
   if (seedDiff !== 0) return seedDiff;
-  return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+  const rankingDiff = (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
+  if (rankingDiff !== 0) return rankingDiff;
+  return a.name.localeCompare(b.name);
 }
 
-function nextPowerOfTwo(value: number): number {
+function normalizeQualifiersPerPool(value: number): number {
+  return Math.max(1, Math.min(4, Math.floor(value) || 2));
+}
+
+function nextPowerOfTwo(value: number) {
   let size = 1;
   while (size < value) size *= 2;
   return size;
+}
+
+function chunkSlots<T>(slots: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < slots.length; index += size) {
+    chunks.push(slots.slice(index, index + size));
+  }
+  return chunks;
 }
