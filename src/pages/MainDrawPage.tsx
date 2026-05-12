@@ -70,6 +70,7 @@ export function MainDrawPage() {
   ), [matches, selectedTournament?.id]);
 
   const [slots, setSlots] = useState<MainDrawSlot[]>([]);
+  const [persistedDrawId, setPersistedDrawId] = useState<string | null>(null);
   const [drawStatus, setDrawStatus] = useState<'draft' | 'published' | 'locked'>('draft');
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showLockConfirm, setShowLockConfirm] = useState(false);
@@ -101,6 +102,7 @@ export function MainDrawPage() {
 
         if (savedDraw && savedDraw.slots.length > 0) {
           setSlots(savedDraw.slots.map(slot => hydratePersistedSlot(slot, teamById)));
+          setPersistedDrawId(savedDraw.drawId);
           setDrawStatus(savedDraw.status);
           return;
         }
@@ -120,6 +122,7 @@ export function MainDrawPage() {
           selectedTournament.qualifiersPerPool ?? 2,
           setupMode,
         ));
+        setPersistedDrawId(null);
         setDrawStatus('draft');
       }
     }
@@ -131,7 +134,16 @@ export function MainDrawPage() {
     };
   }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, setupMode, teamSignature, poolSignature, teamById, addToast]);
 
-  const bracketRounds = useMemo(() => buildBracketRounds(slots), [slots]);
+  const mainDrawMatches = useMemo(() => (
+    matches
+      .filter(match => (
+        match.tournamentId === selectedTournament?.id &&
+        !match.poolId &&
+        (!persistedDrawId || match.drawId === persistedDrawId)
+      ))
+      .sort((a, b) => (a.round - b.round) || (a.matchNumber - b.matchNumber))
+  ), [matches, persistedDrawId, selectedTournament?.id]);
+  const bracketRounds = useMemo(() => buildBracketRounds(slots, mainDrawMatches, teamById), [slots, mainDrawMatches, teamById]);
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
   const totalSlots = editableSlots.length;
   const filledSlots = editableSlots.filter(s => s.team || s.isBye || s.placeholder).length;
@@ -380,6 +392,7 @@ export function MainDrawPage() {
       );
       await refreshMatches();
       await setTournamentStatus(selectedTournament.id, 'main_draw_published');
+      setPersistedDrawId(null);
       setDrawStatus('published');
       addAuditLog({
         action: 'MAIN_DRAW_PUBLISHED',
@@ -925,7 +938,11 @@ function getStartRoundForEntry(entryRound: DrawRoundName): DrawRoundName {
   return entryRound;
 }
 
-function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
+function buildBracketRounds(
+  slots: MainDrawSlot[],
+  persistedMatches: ScheduledMatch[] = [],
+  teamById: Map<string, Team> = new Map(),
+): BracketRound[] {
   if (slots.length === 0) return [];
 
   const earliestIndex = Math.min(...slots.map(slot => ROUND_ORDER.indexOf(slot.entryRound)));
@@ -961,7 +978,12 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
       matches,
     });
 
-    carriedWinners = matches.map((match, index) => createWinnerSlot(match, nextRoundName(name), index + 1));
+    carriedWinners = matches.map((match, index) => createWinnerSlot(
+      match,
+      nextRoundName(name),
+      index + 1,
+      getPersistedMatchWinner(name, index, persistedMatches, teamById),
+    ));
   });
 
   return rounds;
@@ -1070,15 +1092,30 @@ function createAdvanceSlot(entryRound: DrawRoundName, position: number, placehol
   };
 }
 
-function createWinnerSlot(match: BracketMatch, entryRound: DrawRoundName, position: number): MainDrawSlot {
+function createWinnerSlot(
+  match: BracketMatch,
+  entryRound: DrawRoundName,
+  position: number,
+  persistedWinner?: Team,
+): MainDrawSlot {
   const autoWinner = getAutomaticByeWinner(match);
+  const winner = persistedWinner
+    ? {
+        ...createAdvanceSlot(entryRound, position, `Winner ${match.roundName} M${match.matchNumber}`),
+        team: persistedWinner,
+        placeholder: undefined,
+        source: 'advance' as const,
+        isLocked: true,
+      }
+    : autoWinner;
+
   return {
     ...createAdvanceSlot(entryRound, position, `Winner ${match.roundName} M${match.matchNumber}`),
-    team: autoWinner?.team,
-    placeholder: autoWinner ? undefined : `Winner ${match.roundName} M${match.matchNumber}`,
-    candidateTeam: autoWinner?.candidateTeam,
-    source: autoWinner ? autoWinner.source : 'advance',
-    isLocked: Boolean(autoWinner),
+    team: winner?.team,
+    placeholder: winner ? undefined : `Winner ${match.roundName} M${match.matchNumber}`,
+    candidateTeam: winner?.candidateTeam,
+    source: winner ? winner.source : 'advance',
+    isLocked: Boolean(winner),
   };
 }
 
@@ -1088,6 +1125,23 @@ function getAutomaticByeWinner(match: BracketMatch): MainDrawSlot | undefined {
   if (first.isBye && !second.isBye) return second;
   if (second.isBye && !first.isBye) return first;
   return undefined;
+}
+
+function getPersistedMatchWinner(
+  roundName: DrawRoundName,
+  roundMatchIndex: number,
+  persistedMatches: ScheduledMatch[],
+  teamById: Map<string, Team>,
+): Team | undefined {
+  const roundNumber = ROUND_ORDER.indexOf(roundName) + 1;
+  const persistedMatch = persistedMatches
+    .filter(match => match.round === roundNumber)
+    .sort((a, b) => a.matchNumber - b.matchNumber)[roundMatchIndex];
+
+  if (!persistedMatch?.winnerId) return undefined;
+  if (persistedMatch.team1?.id === persistedMatch.winnerId) return persistedMatch.team1;
+  if (persistedMatch.team2?.id === persistedMatch.winnerId) return persistedMatch.team2;
+  return teamById.get(persistedMatch.winnerId);
 }
 
 function nextRoundName(roundName: DrawRoundName): DrawRoundName {
