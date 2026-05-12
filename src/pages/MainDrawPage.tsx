@@ -585,15 +585,9 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
       return;
     }
 
-    const participants = roundIndex === 0
-      ? entrySlots
-      : weaveRoundParticipants(entrySlots, carriedWinners);
-    const matches = chunkSlots(participants, 2).map((matchSlots, index) => ({
-      id: `${name}-match-${index + 1}`,
-      roundName: name,
-      matchNumber: index + 1,
-      slots: ensureMatchPair(matchSlots, name, index + 1),
-    }));
+    const matches = roundIndex === 0
+      ? buildOpeningMatches(name, entrySlots)
+      : buildProgressionMatches(name, entrySlots, carriedWinners);
 
     rounds.push({
       name,
@@ -606,16 +600,40 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
   return rounds;
 }
 
-function weaveRoundParticipants(entries: MainDrawSlot[], winners: MainDrawSlot[]): MainDrawSlot[] {
-  const maxLength = Math.max(entries.length, winners.length);
-  const participants: MainDrawSlot[] = [];
+function buildOpeningMatches(roundName: DrawRoundName, entrySlots: MainDrawSlot[]): BracketMatch[] {
+  return chunkSlots(entrySlots, 2).map((matchSlots, index) => ({
+    id: `${roundName}-match-${index + 1}`,
+    roundName,
+    matchNumber: index + 1,
+    slots: ensureMatchPair(matchSlots, roundName, index + 1),
+  }));
+}
 
-  for (let index = 0; index < maxLength; index += 1) {
-    if (entries[index]) participants.push(entries[index]);
-    if (winners[index]) participants.push(winners[index]);
+function buildProgressionMatches(
+  roundName: DrawRoundName,
+  entrySlots: MainDrawSlot[],
+  previousWinners: MainDrawSlot[],
+): BracketMatch[] {
+  if (entrySlots.length === 0) {
+    return chunkSlots(previousWinners, 2).map((matchSlots, index) => ({
+      id: `${roundName}-match-${index + 1}`,
+      roundName,
+      matchNumber: index + 1,
+      slots: ensureMatchPair(matchSlots, roundName, index + 1),
+    }));
   }
 
-  return participants;
+  const matchCount = Math.max(entrySlots.length, previousWinners.length);
+  return Array.from({ length: matchCount }, (_, index) => {
+    const directEntry = entrySlots[index] ?? createByeSlot(roundName, (index * 2) + 1);
+    const opponent = previousWinners[index] ?? createByeSlot(roundName, (index * 2) + 2);
+    return {
+      id: `${roundName}-match-${index + 1}`,
+      roundName,
+      matchNumber: index + 1,
+      slots: [directEntry, opponent],
+    };
+  });
 }
 
 function chunkSlots(slots: MainDrawSlot[], size: number): MainDrawSlot[][] {
@@ -631,17 +649,22 @@ function ensureMatchPair(slots: MainDrawSlot[], roundName: DrawRoundName, matchN
 
   return [
     ...slots,
-    {
-      id: `display-empty-${roundName.replace('/', '')}-${matchNumber}`,
-      drawId: 'main-draw-local',
-      round: ROUND_ORDER.indexOf(roundName) + 1,
-      position: matchNumber * 2,
-      entryRound: roundName,
-      source: 'empty',
-      isBye: false,
-      isLocked: false,
-    },
+    createByeSlot(roundName, matchNumber * 2),
   ];
+}
+
+function createByeSlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
+  return {
+    id: `display-bye-${entryRound.replace('/', '')}-${position}`,
+    drawId: 'main-draw-local',
+    round: ROUND_ORDER.indexOf(entryRound) + 1,
+    position,
+    entryRound,
+    placeholder: 'BYE',
+    source: 'advance',
+    isBye: true,
+    isLocked: true,
+  };
 }
 
 function createEntrySlot(
