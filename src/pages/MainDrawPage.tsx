@@ -216,6 +216,9 @@ export function MainDrawPage() {
         ? {
             ...slot,
             team: undefined,
+            placeholder: undefined,
+            candidateTeam: undefined,
+            source: 'empty',
             isBye: false,
             isLocked: false,
           }
@@ -242,6 +245,9 @@ export function MainDrawPage() {
       return {
         ...s,
         team: team === 'bye' || team === null ? undefined : team,
+        placeholder: team === 'bye' ? 'BYE' : team === null ? undefined : s.placeholder,
+        candidateTeam: team === 'bye' || team === null ? undefined : s.candidateTeam,
+        source: team === null ? 'empty' : s.source,
         isBye: team === 'bye',
       };
     }));
@@ -693,15 +699,15 @@ function ensureMatchPair(slots: MainDrawSlot[], roundName: DrawRoundName, matchN
 
 function createByeSlot(entryRound: DrawRoundName, position: number): MainDrawSlot {
   return {
-    id: `display-bye-${entryRound.replace('/', '')}-${position}`,
+    id: `bye-${entryRound.replace('/', '')}-${position}`,
     drawId: 'main-draw-local',
     round: ROUND_ORDER.indexOf(entryRound) + 1,
     position,
     entryRound,
     placeholder: 'BYE',
-    source: 'advance',
+    source: 'empty',
     isBye: true,
-    isLocked: true,
+    isLocked: false,
   };
 }
 
