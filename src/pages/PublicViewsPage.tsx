@@ -138,22 +138,22 @@ export function PublicBracketPage() {
                 <p className="section-title mb-0">Official Bracket</p>
                 <p className="text-[10px] text-mpl-gray">{Math.max(0, bracket.size - 1)} matches</p>
               </div>
-              <div className="overflow-x-auto no-scrollbar pb-3">
-                <div className="flex gap-3 min-w-max items-start">
-                  {bracket.rounds.map(round => (
-                    <div key={round.name} className="w-56 flex-shrink-0">
-                      <div className="sticky top-0 z-10 bg-mpl-black pb-2">
-                        <p className="text-[10px] text-mpl-gold font-black uppercase tracking-widest">{round.name}</p>
+              <div className="space-y-5 pb-3">
+                {bracket.rounds.map(round => (
+                  <section key={round.name}>
+                    <div className="sticky top-0 z-10 bg-mpl-black/95 pb-2">
+                      <div className="flex items-end justify-between gap-3">
+                        <p className="text-[11px] text-mpl-gold font-black uppercase tracking-widest">{round.name}</p>
                         <p className="text-[10px] text-mpl-gray">{round.matches.length} matches</p>
                       </div>
-                      <div className="space-y-3">
-                        {round.matches.map(match => (
-                          <PublicMatchCard key={match.id} match={match} />
-                        ))}
-                      </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-2">
+                      {round.matches.map(match => (
+                        <PublicMatchCard key={match.id} match={match} />
+                      ))}
+                    </div>
+                  </section>
+                ))}
               </div>
               {selectedTournament?.competitionMode === 'qualification_phase' && (
                 <div className="mt-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
@@ -172,7 +172,7 @@ export function PublicBracketPage() {
 function PublicMatchCard({ match }: { match: PublicMatch }) {
   return (
     <div className="mpl-card overflow-hidden rounded-lg">
-      <div className="px-3 py-2 bg-mpl-dark border-b border-mpl-border flex items-center justify-between">
+      <div className="px-3 py-1.5 bg-mpl-dark border-b border-mpl-border flex items-center justify-between">
         <p className="text-[9px] text-mpl-gray font-bold uppercase tracking-widest">M{match.matchNumber}</p>
         <p className="text-[9px] text-mpl-gold font-bold">{match.roundName}</p>
       </div>
@@ -180,12 +180,12 @@ function PublicMatchCard({ match }: { match: PublicMatch }) {
         <div
           key={slot.id}
           className={cn(
-            'min-h-[46px] flex items-center gap-2 px-3 py-2 border-b border-mpl-border/40 last:border-0',
+            'min-h-[40px] flex items-center gap-2 px-3 py-1.5 border-b border-mpl-border/40 last:border-0',
             slot.isBye ? 'bg-yellow-500/5' : slot.source === 'qualified' ? 'bg-cyan-500/5' : ''
           )}
         >
           <div className={cn(
-            'w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0',
+            'w-8 h-6 rounded-lg flex items-center justify-center text-[9px] font-black flex-shrink-0',
             slot.isBye ? 'bg-yellow-500/15 text-yellow-400' :
             slot.source === 'winner' ? 'bg-mpl-border text-mpl-gray' :
             slot.source === 'qualified' ? 'bg-cyan-500/15 text-cyan-300' :
@@ -195,18 +195,18 @@ function PublicMatchCard({ match }: { match: PublicMatch }) {
           </div>
           {slot.team ? (
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-bold text-white truncate">{slot.team.name}</p>
+              <p className="text-[11px] leading-tight font-bold text-white break-words">{slot.team.name}</p>
               <p className="text-[10px] text-mpl-gray truncate">{slot.team.clubName}</p>
             </div>
           ) : (
             <div className="flex-1 min-w-0">
-              <p className={cn('text-[12px] font-bold truncate', slot.isBye ? 'text-yellow-400' : 'text-mpl-gray')}>
+              <p className={cn('text-[11px] leading-tight font-bold break-words', slot.isBye ? 'text-yellow-400' : 'text-mpl-gray')}>
                 {slot.label}
               </p>
               <p className="text-[10px] text-mpl-gray">{slot.source === 'winner' ? 'Advances here' : match.roundName}</p>
             </div>
           )}
-          {index === 0 && match.slots.length > 1 && <span className="text-[10px] text-mpl-gray">vs</span>}
+          {index === 0 && match.slots.length > 1 && <span className="text-[9px] text-mpl-gray flex-shrink-0">vs</span>}
           {slot.isLocked && <Lock size={10} className="text-mpl-gold flex-shrink-0" />}
         </div>
       ))}
