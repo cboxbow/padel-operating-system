@@ -618,7 +618,7 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
       matches,
     });
 
-    carriedWinners = matches.map((match, index) => createAdvanceSlot(nextRoundName(name), index + 1, `Winner ${name} M${match.matchNumber}`));
+    carriedWinners = matches.map((match, index) => createWinnerSlot(match, nextRoundName(name), index + 1));
   });
 
   return rounds;
@@ -746,6 +746,26 @@ function createAdvanceSlot(entryRound: DrawRoundName, position: number, placehol
     isBye: false,
     isLocked: true,
   };
+}
+
+function createWinnerSlot(match: BracketMatch, entryRound: DrawRoundName, position: number): MainDrawSlot {
+  const autoWinner = getAutomaticByeWinner(match);
+  return {
+    ...createAdvanceSlot(entryRound, position, `Winner ${match.roundName} M${match.matchNumber}`),
+    team: autoWinner?.team,
+    placeholder: autoWinner ? undefined : `Winner ${match.roundName} M${match.matchNumber}`,
+    candidateTeam: autoWinner?.candidateTeam,
+    source: autoWinner ? autoWinner.source : 'advance',
+    isLocked: Boolean(autoWinner),
+  };
+}
+
+function getAutomaticByeWinner(match: BracketMatch): MainDrawSlot | undefined {
+  if (match.slots.length !== 2) return undefined;
+  const [first, second] = match.slots;
+  if (first.isBye && !second.isBye) return second;
+  if (second.isBye && !first.isBye) return first;
+  return undefined;
 }
 
 function nextRoundName(roundName: DrawRoundName): DrawRoundName {
