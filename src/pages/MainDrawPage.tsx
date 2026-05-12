@@ -91,7 +91,7 @@ export function MainDrawPage() {
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
   const totalSlots = editableSlots.length;
   const filledSlots = editableSlots.filter(s => s.team || s.isBye || s.placeholder).length;
-  const byeCount = editableSlots.filter(s => s.isBye).length;
+  const byeCount = slots.filter(s => s.isBye).length;
   const lockedSlots = editableSlots.filter(s => s.isLocked).length;
   const directSlotCount = editableSlots.filter(s => s.source === 'team').length;
   const qualifierSlots = editableSlots.filter(s => s.source === 'qualifier').length;
@@ -504,14 +504,19 @@ function buildMainDrawSlots(
 
   directRegistrations.forEach(reg => {
     const entryRound = normalizeDrawEntry(getDrawEntry(reg.notes)) ?? earliestRound;
+    const startRound = getStartRoundForEntry(entryRound);
     slots.push(createEntrySlot(
-      entryRound,
-      nextPosition(roundPositions, entryRound),
+      startRound,
+      nextPosition(roundPositions, startRound),
       undefined,
       'team',
       buildDirectSlotLabel(reg.team, entryRound),
       reg.team,
     ));
+
+    if (startRound !== entryRound) {
+      slots.push(createByeSlot(startRound, nextPosition(roundPositions, startRound)));
+    }
   });
 
   if (competitionMode === 'qualification_phase' && pools.length > 0) {
@@ -534,14 +539,18 @@ function buildMainDrawSlots(
       .map(reg => reg.team)
       .sort(sortTeamsForDraw)
       .forEach(team => {
+        const startRound = getStartRoundForEntry(earliestRound);
         slots.push(createEntrySlot(
-          earliestRound,
-          nextPosition(roundPositions, earliestRound),
+          startRound,
+          nextPosition(roundPositions, startRound),
           undefined,
           'team',
           buildDirectSlotLabel(team, earliestRound),
           team,
         ));
+        if (startRound !== earliestRound) {
+          slots.push(createByeSlot(startRound, nextPosition(roundPositions, startRound)));
+        }
       });
   }
 
@@ -556,6 +565,15 @@ function buildDirectSlotLabel(team: Team, entryRound: DrawRoundName): string {
   if (team.seed) return `Seed #${team.seed}`;
   if (team.ranking) return `Direct ${entryRound} · W${team.ranking}`;
   return `Direct ${entryRound}`;
+}
+
+function getStartRoundForEntry(entryRound: DrawRoundName): DrawRoundName {
+  const entryIndex = ROUND_ORDER.indexOf(entryRound);
+  const roundOf16Index = ROUND_ORDER.indexOf('1/16');
+  if (entryIndex > roundOf16Index && entryIndex < ROUND_ORDER.indexOf('WINNER')) {
+    return ROUND_ORDER[entryIndex - 1];
+  }
+  return entryRound;
 }
 
 function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
@@ -601,12 +619,32 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
 }
 
 function buildOpeningMatches(roundName: DrawRoundName, entrySlots: MainDrawSlot[]): BracketMatch[] {
-  return chunkSlots(entrySlots, 2).map((matchSlots, index) => ({
+  const matches = chunkSlots(entrySlots, 2).map((matchSlots, index) => ({
     id: `${roundName}-match-${index + 1}`,
     roundName,
     matchNumber: index + 1,
     slots: ensureMatchPair(matchSlots, roundName, index + 1),
   }));
+
+  return interleaveByeAndPlayInMatches(matches).map((match, index) => ({
+    ...match,
+    id: `${roundName}-match-${index + 1}`,
+    matchNumber: index + 1,
+  }));
+}
+
+function interleaveByeAndPlayInMatches(matches: BracketMatch[]): BracketMatch[] {
+  const byeMatches = matches.filter(match => match.slots.some(slot => slot.isBye));
+  const playInMatches = matches.filter(match => !match.slots.some(slot => slot.isBye));
+  const ordered: BracketMatch[] = [];
+  const maxLength = Math.max(byeMatches.length, playInMatches.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (byeMatches[index]) ordered.push(byeMatches[index]);
+    if (playInMatches[index]) ordered.push(playInMatches[index]);
+  }
+
+  return ordered;
 }
 
 function buildProgressionMatches(
