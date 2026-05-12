@@ -6,6 +6,7 @@ import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
+import { fetchPublishedMainDraw, publishMainDraw, type PersistedMainDrawMatch, type PersistedMainDrawSlot } from '../data/mainDraw';
 import type { DrawSlot, MatchSet, Pool, Registration, ScheduledMatch, Team } from '../types';
 
 type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER';
@@ -35,7 +36,7 @@ const BRACKET_BAND_HEIGHT = 104;
 export function MainDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
   const { addToast } = useToast();
-  const { addAuditLog, registrations, pools, matches } = useTournamentData();
+  const { addAuditLog, registrations, pools, matches, refreshMatches } = useTournamentData();
 
   const tournamentRegistrations = useMemo(() => (
     registrations.filter(r => r.tournamentId === selectedTournament?.id && r.status === 'validated')
@@ -83,17 +84,51 @@ export function MainDrawPage() {
   const poolSignature = tournamentPools
     .map(pool => `${pool.id}:${pool.letter}:${pool.slots.map(slot => `${slot.position}:${slot.team?.id ?? ''}`).join(',')}`)
     .join('|');
+  const teamById = useMemo(() => (
+    new Map(tournamentRegistrations.map(reg => [reg.team.id, reg.team]))
+  ), [tournamentRegistrations]);
 
   useEffect(() => {
-    setSlots(buildMainDrawSlots(
-      tournamentRegistrations,
-      tournamentPools,
-      selectedTournament?.competitionMode,
-      selectedTournament?.qualifiersPerPool ?? 2,
-      setupMode,
-    ));
-    setDrawStatus('draft');
-  }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, setupMode, teamSignature, poolSignature]);
+    let cancelled = false;
+
+    async function loadMainDraw() {
+      if (!selectedTournament) return;
+
+      try {
+        const savedDraw = await fetchPublishedMainDraw(selectedTournament.id);
+        if (cancelled) return;
+
+        if (savedDraw && savedDraw.slots.length > 0) {
+          setSlots(savedDraw.slots.map(slot => hydratePersistedSlot(slot, teamById)));
+          setDrawStatus(savedDraw.status);
+          return;
+        }
+      } catch (error) {
+        addToast({
+          type: 'warning',
+          title: 'Main Draw Load Warning',
+          message: error instanceof Error ? error.message : 'Unable to load saved main draw.',
+        });
+      }
+
+      if (!cancelled) {
+        setSlots(buildMainDrawSlots(
+          tournamentRegistrations,
+          tournamentPools,
+          selectedTournament.competitionMode,
+          selectedTournament.qualifiersPerPool ?? 2,
+          setupMode,
+        ));
+        setDrawStatus('draft');
+      }
+    }
+
+    void loadMainDraw();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, setupMode, teamSignature, poolSignature, teamById, addToast]);
 
   const bracketRounds = useMemo(() => buildBracketRounds(slots), [slots]);
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
@@ -324,23 +359,37 @@ export function MainDrawPage() {
     addToast({ type: 'info', title: 'Slot Updated' });
   };
 
-  const handlePublish = () => {
-    setDrawStatus('published');
-    if (selectedTournament) {
-      void setTournamentStatus(selectedTournament.id, 'main_draw_published');
+  const handlePublish = async () => {
+    if (!selectedTournament) return;
+
+    try {
+      await publishMainDraw(
+        selectedTournament.id,
+        serializeMainDrawSlots(slots),
+        serializeMainDrawMatches(bracketRounds),
+      );
+      await refreshMatches();
+      await setTournamentStatus(selectedTournament.id, 'main_draw_published');
+      setDrawStatus('published');
+      addAuditLog({
+        action: 'MAIN_DRAW_PUBLISHED',
+        module: 'Main Draw',
+        entityType: 'draw',
+        entityId: 'main-draw-local',
+        description: 'Main draw published officially by Admin MPL.',
+        adminId: 'adm1',
+        adminName: 'Admin MPL',
+        isOverride: false,
+      });
+      addToast({ type: 'success', title: 'Main Draw Published!', message: 'Bracket, slots and matches saved to Supabase.' });
+      setShowPublishConfirm(false);
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Publish Failed',
+        message: error instanceof Error ? error.message : 'Unable to publish main draw.',
+      });
     }
-    addAuditLog({
-      action: 'MAIN_DRAW_PUBLISHED',
-      module: 'Main Draw',
-      entityType: 'draw',
-      entityId: 'main-draw-local',
-      description: 'Main draw published officially by Admin MPL.',
-      adminId: 'adm1',
-      adminName: 'Admin MPL',
-      isOverride: false,
-    });
-    addToast({ type: 'success', title: 'Main Draw Published!', message: 'Bracket is now visible to all players.' });
-    setShowPublishConfirm(false);
   };
 
   const handleLock = () => {
@@ -569,7 +618,7 @@ export function MainDrawPage() {
       <ConfirmDialog
         isOpen={showPublishConfirm}
         onClose={() => setShowPublishConfirm(false)}
-        onConfirm={handlePublish}
+        onConfirm={() => void handlePublish()}
         title="Publish Main Draw?"
         message="This will make the main draw official and visible to all players. Empty slots, qualifiers and BYEs are allowed and remain part of the published bracket."
         confirmLabel="Publish Official Draw"
@@ -658,6 +707,66 @@ function buildMainDrawSlots(
   }
 
   return slots.sort(sortSlotsByRound);
+}
+
+function hydratePersistedSlot(slot: PersistedMainDrawSlot, teamById: Map<string, Team>): MainDrawSlot {
+  const team = slot.teamId ? teamById.get(slot.teamId) : undefined;
+  const entryRound = ROUND_ORDER[slot.round - 1] ?? '1/16';
+
+  return {
+    id: slot.id,
+    drawId: 'main-draw-supabase',
+    round: slot.round,
+    position: slot.position,
+    entryRound,
+    team,
+    isBye: slot.isBye,
+    isLocked: slot.isLocked,
+    winnerId: slot.winnerId ?? undefined,
+    placeholder: slot.isBye ? 'BYE' : undefined,
+    source: team ? 'team' : 'empty',
+  };
+}
+
+function serializeMainDrawSlots(slots: MainDrawSlot[]): PersistedMainDrawSlot[] {
+  return slots
+    .filter(slot => slot.source !== 'advance')
+    .map(slot => ({
+      id: slot.id,
+      round: slot.round,
+      position: slot.position,
+      teamId: slot.team?.id ?? null,
+      isBye: slot.isBye,
+      isLocked: slot.isLocked,
+      winnerId: slot.winnerId ?? null,
+    }));
+}
+
+function serializeMainDrawMatches(rounds: BracketRound[]): PersistedMainDrawMatch[] {
+  let matchNumber = 1;
+  const persisted: PersistedMainDrawMatch[] = [];
+
+  rounds.forEach(round => {
+    if (round.name === 'WINNER') return;
+
+    round.matches.forEach(match => {
+      if (match.slots.length < 2) return;
+      const [first, second] = match.slots;
+      const autoWinner = getAutomaticByeWinner(match);
+
+      persisted.push({
+        round: ROUND_ORDER.indexOf(match.roundName) + 1,
+        matchNumber: matchNumber++,
+        team1Id: first.team?.id ?? null,
+        team2Id: second.team?.id ?? null,
+        isBye: first.isBye || second.isBye,
+        winnerId: autoWinner?.team?.id ?? null,
+        status: autoWinner?.team ? 'completed' : 'scheduled',
+      });
+    });
+  });
+
+  return persisted;
 }
 
 function normalizeQualifiersPerPool(value: number): number {
