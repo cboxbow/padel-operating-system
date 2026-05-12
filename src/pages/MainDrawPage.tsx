@@ -15,6 +15,7 @@ type MainDrawSlot = DrawSlot & {
   candidateTeam?: Team;
   source?: 'team' | 'qualifier' | 'empty' | 'advance';
 };
+type DrawSetupMode = 'manual' | 'seed_labels';
 
 interface BracketRound {
   name: DrawRoundName;
@@ -71,6 +72,7 @@ export function MainDrawPage() {
   const [swapTarget, setSwapTarget] = useState<MainDrawSlot | null>(null);
   const [showSwapPicker, setShowSwapPicker] = useState(false);
   const [draggedSlotId, setDraggedSlotId] = useState<string | null>(null);
+  const [setupMode, setSetupMode] = useState<DrawSetupMode>('manual');
 
   const teamSignature = tournamentRegistrations
     .map(reg => `${reg.id}:${reg.team.id}:${reg.team.seed ?? ''}:${reg.team.ranking ?? ''}:${getDrawEntry(reg.notes)}`)
@@ -83,9 +85,10 @@ export function MainDrawPage() {
       tournamentPools,
       selectedTournament?.competitionMode,
       selectedTournament?.qualifiersPerPool ?? 2,
+      setupMode,
     ));
     setDrawStatus('draft');
-  }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, teamSignature, poolSignature]);
+  }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, setupMode, teamSignature, poolSignature]);
 
   const bracketRounds = useMemo(() => buildBracketRounds(slots), [slots]);
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
@@ -138,6 +141,7 @@ export function MainDrawPage() {
       tournamentPools,
       selectedTournament?.competitionMode,
       selectedTournament?.qualifiersPerPool ?? 2,
+      setupMode,
     ));
     setDrawStatus('draft');
     addToast({ type: 'warning', title: 'Main Draw Reset', message: 'Bracket returned to generated slots.' });
@@ -372,6 +376,16 @@ export function MainDrawPage() {
 
           {drawStatus === 'draft' && (
             <div className="px-4 mt-4 space-y-2">
+              <div>
+                <select
+                  className="input-field py-2 text-xs"
+                  value={setupMode}
+                  onChange={event => setSetupMode(event.target.value as DrawSetupMode)}
+                >
+                  <option value="manual">Manual setup - all playable slots empty</option>
+                  <option value="seed_labels">Seed labels setup - show seed/direct placeholders</option>
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAutoFillDirect}>
                   <Shuffle size={13} /> Auto Fill Direct
@@ -530,6 +544,7 @@ function buildMainDrawSlots(
   pools: Pool[],
   competitionMode?: 'main_draw_direct' | 'qualification_phase',
   qualifiersPerPool = 2,
+  setupMode: DrawSetupMode = 'manual',
 ): MainDrawSlot[] {
   const directRegistrations = registrations
     .filter(reg => getDrawEntry(reg.notes) !== 'QUALIF')
@@ -549,7 +564,7 @@ function buildMainDrawSlots(
       nextPosition(roundPositions, startRound),
       undefined,
       'team',
-      buildDirectSlotLabel(reg.team, entryRound),
+      setupMode === 'manual' ? undefined : buildDirectSlotLabel(reg.team, entryRound),
       reg.team,
     ));
 
@@ -584,7 +599,7 @@ function buildMainDrawSlots(
           nextPosition(roundPositions, startRound),
           undefined,
           'team',
-          buildDirectSlotLabel(team, earliestRound),
+          setupMode === 'manual' ? undefined : buildDirectSlotLabel(team, earliestRound),
           team,
         ));
         if (startRound !== earliestRound) {
