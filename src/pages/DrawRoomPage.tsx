@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus, RotateCcw
+  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus, RotateCcw, Radio
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -389,6 +389,13 @@ export function PoolDrawPage() {
 
           {pool && (
             <div className="px-4 mt-4 space-y-4">
+              <button
+                className="w-full btn-ghost flex items-center justify-center gap-2 text-xs border-green-500/30 text-green-300"
+                onClick={() => navigate('obs_pools', selectedTournament?.id)}
+              >
+                <Radio size={13} /> OBS Live
+              </button>
+
               {/* Pool status */}
               <div className="flex items-center justify-between">
                 <div>

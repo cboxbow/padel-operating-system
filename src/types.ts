@@ -274,7 +274,9 @@ export type AppView =
   | 'qualified_teams'
   | 'match_schedule'
   | 'public_pools'
-  | 'public_bracket';
+  | 'public_bracket'
+  | 'obs_main_draw'
+  | 'obs_pools';
 
 export interface ToastMessage {
   id: string;

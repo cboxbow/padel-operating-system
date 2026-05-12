@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3, Plus, RotateCcw
+  Shuffle, Lock, Unlock, Globe, Edit3, Plus, RotateCcw, Radio
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -501,6 +501,15 @@ export function MainDrawPage() {
               No validated teams found for this tournament. Validate or import teams first.
             </div>
           )}
+
+          <div className="px-4 mt-4">
+            <button
+              className="w-full btn-ghost flex items-center justify-center gap-2 text-xs border-green-500/30 text-green-300"
+              onClick={() => navigate('obs_main_draw', selectedTournament?.id)}
+            >
+              <Radio size={13} /> OBS Live
+            </button>
+          </div>
 
           {drawStatus === 'draft' && (
             <div className="px-4 mt-4 space-y-2">
