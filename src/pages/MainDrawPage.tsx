@@ -106,9 +106,16 @@ export function MainDrawPage() {
   const qualifiedTeamOptions = useMemo(() => (
     Array.from(buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2).values())
   ), [tournamentMatches, tournamentPools, selectedTournament?.qualifiersPerPool]);
-  const pickerTeams = swapTarget?.source === 'qualifier'
-    ? dedupeTeams([...qualifiedTeamOptions, ...poolTeams])
-    : dedupeTeams([...directTeams, ...qualifiedTeamOptions]);
+  const qualifiedTeamIds = new Set(qualifiedTeamOptions.map(team => team.id));
+  const pickerTeamGroups = swapTarget?.source === 'qualifier'
+    ? [
+        { label: 'Qualified from pools', teams: qualifiedTeamOptions },
+        { label: 'All pool teams', teams: poolTeams.filter(team => !qualifiedTeamIds.has(team.id)) },
+      ]
+    : [
+        { label: 'Direct / seeded teams', teams: directTeams },
+        { label: 'Qualified from pools', teams: qualifiedTeamOptions.filter(team => !directTeams.some(direct => direct.id === team.id)) },
+      ];
 
   const handleAutoFillDirect = () => {
     setSlots(prev => {
@@ -508,26 +515,41 @@ export function MainDrawPage() {
               >
                 Clear Slot
               </button>
-              {pickerTeams.map(team => (
-                <button
-                  key={team.id}
-                  onClick={() => handleSwapTeam(team)}
-                  className="w-full p-3 rounded-xl border border-mpl-border bg-mpl-dark text-left hover:border-mpl-gold/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0',
-                      team.seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
-                    )}>
-                      {team.seed ? `#${team.seed}` : team.ranking ?? '-'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{team.name}</p>
-                      <p className="text-xs text-mpl-gray">{team.clubName}</p>
-                    </div>
+              {pickerTeamGroups.map(group => (
+                group.teams.length > 0 && (
+                  <div key={group.label} className="space-y-2">
+                    <p className="px-1 pt-2 text-[10px] font-black uppercase tracking-widest text-mpl-gray">{group.label}</p>
+                    {dedupeTeams(group.teams).map(team => (
+                      <button
+                        key={team.id}
+                        onClick={() => handleSwapTeam(team)}
+                        className="w-full p-3 rounded-xl border border-mpl-border bg-mpl-dark text-left hover:border-mpl-gold/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0',
+                            team.seed ? 'bg-gold-gradient text-mpl-black' : qualifiedTeamIds.has(team.id) ? 'bg-cyan-500/20 text-cyan-300' : 'bg-mpl-border text-mpl-gray'
+                          )}>
+                            {team.seed ? `#${team.seed}` : qualifiedTeamIds.has(team.id) ? 'Q' : team.ranking ?? '-'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{team.name}</p>
+                            <p className="text-xs text-mpl-gray">{team.clubName}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                </button>
+                )
               ))}
+              {pickerTeamGroups.every(group => group.teams.length === 0) && (
+                <div className="rounded-xl border border-mpl-border bg-mpl-dark px-3 py-4 text-center">
+                  <p className="text-sm font-semibold text-white">No teams available</p>
+                  <p className="text-xs text-mpl-gray mt-1">
+                    Complete pool scores and use Auto Fill Qualif, or validate direct teams first.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -754,32 +776,12 @@ function buildBracketRounds(slots: MainDrawSlot[]): BracketRound[] {
 }
 
 function buildOpeningMatches(roundName: DrawRoundName, entrySlots: MainDrawSlot[]): BracketMatch[] {
-  const matches = chunkSlots(entrySlots, 2).map((matchSlots, index) => ({
+  return chunkSlots(entrySlots, 2).map((matchSlots, index) => ({
     id: `${roundName}-match-${index + 1}`,
     roundName,
     matchNumber: index + 1,
     slots: ensureMatchPair(matchSlots, roundName, index + 1),
   }));
-
-  return interleaveByeAndPlayInMatches(matches).map((match, index) => ({
-    ...match,
-    id: `${roundName}-match-${index + 1}`,
-    matchNumber: index + 1,
-  }));
-}
-
-function interleaveByeAndPlayInMatches(matches: BracketMatch[]): BracketMatch[] {
-  const byeMatches = matches.filter(match => match.slots.some(slot => slot.isBye));
-  const playInMatches = matches.filter(match => !match.slots.some(slot => slot.isBye));
-  const ordered: BracketMatch[] = [];
-  const maxLength = Math.max(byeMatches.length, playInMatches.length);
-
-  for (let index = 0; index < maxLength; index += 1) {
-    if (byeMatches[index]) ordered.push(byeMatches[index]);
-    if (playInMatches[index]) ordered.push(playInMatches[index]);
-  }
-
-  return ordered;
 }
 
 function buildProgressionMatches(
