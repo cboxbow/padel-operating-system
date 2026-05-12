@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus
+  Shuffle, Lock, Unlock, Globe, Edit3, ChevronRight, CheckCircle, Plus, RotateCcw
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -118,7 +118,7 @@ export function DrawRoomPage() {
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
 export function PoolDrawPage() {
   const { navigate, selectedTournament, setTournamentStatus } = useAppState();
-  const { pools, poolsError, registrations, generatePools, redrawPool, publishPool, addSlotToPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
+  const { pools, poolsError, registrations, generatePools, resetPools, redrawPool, publishPool, addSlotToPool, updatePoolSlot, toggleSlotLock, addAuditLog } = useTournamentData();
   const { addToast } = useToast();
 
   const [selectedPool, setSelectedPool] = useState<string>('');
@@ -161,7 +161,7 @@ export function PoolDrawPage() {
   const handleGeneratePools = async () => {
     if (!selectedTournament) return;
     try {
-      await generatePools(selectedTournament.id, poolTeams);
+      await generatePools(selectedTournament.id, poolTeams, selectedTournament.poolCount);
       await setTournamentStatus(selectedTournament.id, 'pool_draw_ready');
       addToast({ type: 'success', title: 'Pools Generated', message: `${poolTeams.length} teams placed into pools.` });
     } catch (error) {
@@ -169,6 +169,22 @@ export function PoolDrawPage() {
         type: 'error',
         title: 'Pool Generation Failed',
         message: error instanceof Error ? error.message : 'Unable to generate pools.',
+      });
+    }
+  };
+
+  const handleResetPools = async () => {
+    if (!selectedTournament) return;
+    try {
+      await resetPools(selectedTournament.id);
+      await setTournamentStatus(selectedTournament.id, 'draw_preparation');
+      setSelectedPool('');
+      addToast({ type: 'warning', title: 'Pool Draw Reset', message: 'All pools were removed. Generate again when ready.' });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Reset Failed',
+        message: error instanceof Error ? error.message : 'Unable to reset pools.',
       });
     }
   };
@@ -455,6 +471,12 @@ export function PoolDrawPage() {
                     onClick={() => void handleAddSlot()}
                   >
                     <Plus size={14} /> Add Empty Slot
+                  </button>
+                  <button
+                    className="w-full btn-ghost flex items-center justify-center gap-2 text-red-300 border-red-500/30"
+                    onClick={() => void handleResetPools()}
+                  >
+                    <RotateCcw size={14} /> Reset Pool Draw
                   </button>
                   <button
                     className="w-full btn-gold flex items-center justify-center gap-2"

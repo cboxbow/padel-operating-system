@@ -9,6 +9,7 @@ interface TournamentRow {
   status: Tournament['status'];
   competition_mode?: CompetitionMode | null;
   qualifiers_per_pool?: number | null;
+  pool_count?: number | null;
   start_date: string;
   end_date: string;
   venue: string;
@@ -26,6 +27,7 @@ function toTournament(row: TournamentRow): Tournament {
     status: row.status,
     competitionMode: row.competition_mode ?? 'main_draw_direct',
     qualifiersPerPool: row.qualifiers_per_pool ?? 2,
+    poolCount: row.pool_count ?? 4,
     startDate: row.start_date,
     endDate: row.end_date,
     venue: row.venue,
@@ -40,7 +42,7 @@ function toTournament(row: TournamentRow): Tournament {
 export async function fetchTournaments(): Promise<Tournament[]> {
   const { data, error } = await supabase
     .from('tournaments')
-    .select('id,name,event_type,category,status,competition_mode,qualifiers_per_pool,start_date,end_date,venue,max_teams,created_at,updated_at')
+    .select('id,name,event_type,category,status,competition_mode,qualifiers_per_pool,pool_count,start_date,end_date,venue,max_teams,created_at,updated_at')
     .order('start_date', { ascending: false });
 
   if (error && isMissingColumnError(error)) {
@@ -143,6 +145,33 @@ export async function updateTournamentQualifiersPerPool(
   }
 }
 
+export async function updateTournamentPoolCount(
+  tournamentId: string,
+  poolCount: number,
+): Promise<void> {
+  const normalized = normalizePoolCount(poolCount);
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ pool_count: normalized })
+    .eq('id', tournamentId);
+
+  if (error) {
+    if (isMissingColumnError(error)) {
+      throw new Error('La colonne pool_count manque dans Supabase. Lance la migration 20260512123000_pool_count.sql.');
+    }
+    throw error;
+  }
+
+  const { error: eventError } = await supabase
+    .from('tournament_events')
+    .update({ pool_count: normalized })
+    .eq('tournament_id', tournamentId);
+
+  if (eventError && !isMissingColumnError(eventError)) {
+    throw eventError;
+  }
+}
+
 export type CreateTournamentInput = {
   name: string;
   eventType: Tournament['eventType'];
@@ -150,6 +179,7 @@ export type CreateTournamentInput = {
   status: Tournament['status'];
   competitionMode: CompetitionMode;
   qualifiersPerPool: number;
+  poolCount: number;
   startDate: string;
   endDate: string;
   venue: string;
@@ -165,6 +195,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
     status: input.status,
     competition_mode: input.competitionMode,
     qualifiers_per_pool: normalizeQualifiersPerPool(input.qualifiersPerPool),
+    pool_count: normalizePoolCount(input.poolCount),
     start_date: input.startDate,
     end_date: input.endDate,
     venue: input.venue,
@@ -175,7 +206,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<To
   const { data: tournament, error } = await supabase
     .from('tournaments')
     .insert(payload)
-    .select('id,name,event_type,category,status,competition_mode,qualifiers_per_pool,start_date,end_date,venue,max_teams,created_at,updated_at')
+    .select('id,name,event_type,category,status,competition_mode,qualifiers_per_pool,pool_count,start_date,end_date,venue,max_teams,created_at,updated_at')
     .single();
 
   if (error && isMissingColumnError(error)) {
@@ -218,6 +249,7 @@ async function createTournamentWithoutMode(input: CreateTournamentInput, adminPr
     ...(tournament as TournamentRow),
     competition_mode: input.competitionMode,
     qualifiers_per_pool: normalizeQualifiersPerPool(input.qualifiersPerPool),
+    pool_count: normalizePoolCount(input.poolCount),
   };
 
   await insertTournamentEvent(row);
@@ -235,6 +267,7 @@ async function insertTournamentEvent(row: TournamentRow): Promise<void> {
     status: row.status,
     competition_mode: row.competition_mode ?? 'main_draw_direct',
     qualifiers_per_pool: row.qualifiers_per_pool ?? 2,
+    pool_count: row.pool_count ?? 4,
     starts_at: `${row.start_date}T00:00:00+04:00`,
     ends_at: `${row.end_date}T23:59:00+04:00`,
   };
@@ -247,7 +280,7 @@ async function insertTournamentEvent(row: TournamentRow): Promise<void> {
     throw error;
   }
 
-  const { competition_mode: _competitionMode, qualifiers_per_pool: _qualifiersPerPool, ...fallbackPayload } = eventPayload;
+  const { competition_mode: _competitionMode, qualifiers_per_pool: _qualifiersPerPool, pool_count: _poolCount, ...fallbackPayload } = eventPayload;
   const { error: fallbackError } = await supabase.from('tournament_events').insert(fallbackPayload);
 
   if (fallbackError) {
@@ -256,11 +289,15 @@ async function insertTournamentEvent(row: TournamentRow): Promise<void> {
 }
 
 function isMissingColumnError(error: { code?: string; message?: string }): boolean {
-  return error.code === '42703' || error.code === 'PGRST204' || /competition_mode|qualifiers_per_pool|column/i.test(error.message ?? '');
+  return error.code === '42703' || error.code === 'PGRST204' || /competition_mode|qualifiers_per_pool|pool_count|column/i.test(error.message ?? '');
 }
 
 function normalizeQualifiersPerPool(value: number): number {
   return Math.max(1, Math.min(4, Math.floor(value) || 2));
+}
+
+function normalizePoolCount(value: number): number {
+  return Math.max(1, Math.min(16, Math.floor(value) || 4));
 }
 
 async function assertCanCreateTournament(): Promise<string> {

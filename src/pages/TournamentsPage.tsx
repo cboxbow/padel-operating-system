@@ -25,6 +25,7 @@ export function TournamentsPage() {
     status: 'draft' as Tournament['status'],
     competitionMode: 'main_draw_direct' as Tournament['competitionMode'],
     qualifiersPerPool: '2',
+    poolCount: '4',
   });
 
   const filtered = tournaments.filter(t => {
@@ -58,6 +59,7 @@ export function TournamentsPage() {
         status: form.status,
         competitionMode: form.competitionMode,
         qualifiersPerPool: parseInt(form.qualifiersPerPool, 10) || 2,
+        poolCount: parseInt(form.poolCount, 10) || 4,
       });
       addToast({ type: 'success', title: 'Tournament Created', message: form.name.trim() });
       setShowCreate(false);
@@ -72,6 +74,7 @@ export function TournamentsPage() {
         status: 'draft',
         competitionMode: 'main_draw_direct',
         qualifiersPerPool: '2',
+        poolCount: '4',
       });
     } catch (error) {
       addToast({
@@ -193,18 +196,31 @@ export function TournamentsPage() {
             </select>
           </div>
           {form.competitionMode === 'qualification_phase' && (
-            <div>
-              <label className="section-title">Qualifiers per Pool</label>
-              <select
-                className="input-field"
-                value={form.qualifiersPerPool}
-                onChange={e => setForm(prev => ({ ...prev, qualifiersPerPool: e.target.value }))}
-              >
-                <option value="1">Top 1 qualifies</option>
-                <option value="2">Top 2 qualify</option>
-                <option value="3">Top 3 qualify</option>
-                <option value="4">Top 4 qualify</option>
-              </select>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="section-title">Pools</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={16}
+                  className="input-field"
+                  value={form.poolCount}
+                  onChange={e => setForm(prev => ({ ...prev, poolCount: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="section-title">Qualifiers</label>
+                <select
+                  className="input-field"
+                  value={form.qualifiersPerPool}
+                  onChange={e => setForm(prev => ({ ...prev, qualifiersPerPool: e.target.value }))}
+                >
+                  <option value="1">Top 1</option>
+                  <option value="2">Top 2</option>
+                  <option value="3">Top 3</option>
+                  <option value="4">Top 4</option>
+                </select>
+              </div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">

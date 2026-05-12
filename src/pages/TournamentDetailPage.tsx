@@ -46,7 +46,7 @@ interface AdminAction {
 }
 
 export function TournamentDetailPage() {
-  const { selectedTournament, navigate, setTournamentMode, setTournamentQualifiersPerPool, setTournamentStatus } = useAppState();
+  const { selectedTournament, navigate, setTournamentMode, setTournamentPoolCount, setTournamentQualifiersPerPool, setTournamentStatus } = useAppState();
   const { registrations, pools, matches, generatePools, generatePoolMatches } = useTournamentData();
   const { addToast } = useToast();
 
@@ -186,7 +186,7 @@ export function TournamentDetailPage() {
 
   const handleGeneratePools = async () => {
     try {
-      await generatePools(t.id, poolEligibleTeams);
+      await generatePools(t.id, poolEligibleTeams, t.poolCount);
       await setTournamentStatus(t.id, 'pool_draw_ready');
       addToast({ type: 'success', title: 'Qualif Pools Generated', message: `${poolEligibleTeams.length} teams placed into qualification pools.` });
     } catch (error) {
@@ -241,6 +241,23 @@ export function TournamentDetailPage() {
         type: 'error',
         title: 'Rule Update Failed',
         message: error instanceof Error ? error.message : 'Unable to update qualifier rule.',
+      });
+    }
+  };
+
+  const handlePoolCountChange = async (poolCount: number) => {
+    try {
+      await setTournamentPoolCount(t.id, poolCount);
+      addToast({
+        type: 'success',
+        title: 'Pool Count Updated',
+        message: `${poolCount} pools will be generated for qualification.`,
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Pool Count Failed',
+        message: error instanceof Error ? error.message : 'Unable to update pool count.',
       });
     }
   };
@@ -304,20 +321,34 @@ export function TournamentDetailPage() {
                 <span className="text-white font-medium">{t.maxTeams} teams max</span>
               </div>
               {t.competitionMode === 'qualification_phase' && (
-                <div className="flex justify-between items-center gap-3 text-sm">
-                  <span className="text-mpl-gray">Qualifiers</span>
-                  <select
-                    className="input-field max-w-[58%] py-1.5 text-xs"
-                    value={t.qualifiersPerPool}
-                    onChange={event => void handleQualifiersPerPoolChange(parseInt(event.target.value, 10))}
-                    disabled={!['draft', 'registration_open', 'registration_closed', 'draw_preparation', 'pool_draw_ready'].includes(t.status)}
-                  >
-                    <option value={1}>Top 1 / pool</option>
-                    <option value={2}>Top 2 / pool</option>
-                    <option value={3}>Top 3 / pool</option>
-                    <option value={4}>Top 4 / pool</option>
-                  </select>
-                </div>
+                <>
+                  <div className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-mpl-gray">Pools</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={16}
+                      className="input-field max-w-[58%] py-1.5 text-xs"
+                      value={t.poolCount}
+                      onChange={event => void handlePoolCountChange(parseInt(event.target.value, 10))}
+                      disabled={!['draft', 'registration_open', 'registration_closed', 'draw_preparation'].includes(t.status)}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-mpl-gray">Qualifiers</span>
+                    <select
+                      className="input-field max-w-[58%] py-1.5 text-xs"
+                      value={t.qualifiersPerPool}
+                      onChange={event => void handleQualifiersPerPoolChange(parseInt(event.target.value, 10))}
+                      disabled={!['draft', 'registration_open', 'registration_closed', 'draw_preparation', 'pool_draw_ready'].includes(t.status)}
+                    >
+                      <option value={1}>Top 1 / pool</option>
+                      <option value={2}>Top 2 / pool</option>
+                      <option value={3}>Top 3 / pool</option>
+                      <option value={4}>Top 4 / pool</option>
+                    </select>
+                  </div>
+                </>
               )}
             </div>
 

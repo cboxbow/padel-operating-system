@@ -216,7 +216,7 @@ export async function addPoolSlot(poolId: string, position: number): Promise<voi
   }
 }
 
-export async function generatePoolDraw(tournamentId: string, teams: Team[]): Promise<void> {
+export async function generatePoolDraw(tournamentId: string, teams: Team[], requestedPoolCount?: number): Promise<void> {
   if (teams.length < 2) {
     throw new Error('At least 2 validated teams are required to generate pools.');
   }
@@ -266,7 +266,7 @@ export async function generatePoolDraw(tournamentId: string, teams: Team[]): Pro
     return (a.ranking ?? Number.MAX_SAFE_INTEGER) - (b.ranking ?? Number.MAX_SAFE_INTEGER);
   });
 
-  const poolCount = Math.max(1, Math.ceil(sortedTeams.length / 4));
+  const poolCount = Math.max(1, Math.min(requestedPoolCount ?? Math.ceil(sortedTeams.length / 4), sortedTeams.length));
   const poolSize = Math.ceil(sortedTeams.length / poolCount);
   const poolLetters = Array.from({ length: poolCount }, (_, index) => String.fromCharCode(65 + index));
 
@@ -297,6 +297,34 @@ export async function generatePoolDraw(tournamentId: string, teams: Team[]): Pro
   }
 
   await updateTournamentStatusByEvent(tournamentId, 'pool_draw_ready');
+}
+
+export async function resetPoolDraw(tournamentId: string): Promise<void> {
+  const { data: event, error: eventError } = await supabase
+    .from('tournament_events')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (eventError) {
+    throw eventError;
+  }
+
+  if (!event) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('pools')
+    .delete()
+    .eq('tournament_event_id', event.id);
+
+  if (error) {
+    throw error;
+  }
+
+  await updateTournamentStatusByEvent(tournamentId, 'draw_preparation');
 }
 
 function buildPoolSlots(

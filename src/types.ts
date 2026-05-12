@@ -58,6 +58,7 @@ export interface Tournament {
   status: TournamentStatus;
   competitionMode: CompetitionMode;
   qualifiersPerPool: number;
+  poolCount: number;
   startDate: string;
   endDate: string;
   venue: string;

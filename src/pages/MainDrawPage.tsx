@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
-  Shuffle, Lock, Unlock, Globe, Edit3, Plus
+  Shuffle, Lock, Unlock, Globe, Edit3, Plus, RotateCcw
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -114,6 +114,33 @@ export function MainDrawPage() {
       });
     });
     addToast({ type: 'success', title: 'Direct Slots Filled', message: 'Seeded/direct teams placed into their main draw slots.' });
+  };
+
+  const handleAutoFillQualifiers = () => {
+    const qualifiersByCode = buildQualifierMap(tournamentPools, selectedTournament?.qualifiersPerPool ?? 2);
+    setSlots(prev => prev.map(slot => {
+      if (slot.source !== 'qualifier' || !slot.placeholder) return slot;
+      const team = qualifiersByCode.get(slot.placeholder);
+      if (!team) return slot;
+      return {
+        ...slot,
+        team,
+        isBye: false,
+        isLocked: false,
+      };
+    }));
+    addToast({ type: 'success', title: 'Qualifiers Filled', message: 'Pool qualifiers placed by pool/rank code.' });
+  };
+
+  const handleResetMainDraw = () => {
+    setSlots(buildMainDrawSlots(
+      tournamentRegistrations,
+      tournamentPools,
+      selectedTournament?.competitionMode,
+      selectedTournament?.qualifiersPerPool ?? 2,
+    ));
+    setDrawStatus('draft');
+    addToast({ type: 'warning', title: 'Main Draw Reset', message: 'Bracket returned to generated slots.' });
   };
 
   const handleRandomDraw = () => {
@@ -349,15 +376,21 @@ export function MainDrawPage() {
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAutoFillDirect}>
                   <Shuffle size={13} /> Auto Fill Direct
                 </button>
-                <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleRandomDraw}>
-                  <Shuffle size={13} /> Random Draw
+                <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAutoFillQualifiers}>
+                  <Shuffle size={13} /> Auto Fill Qualif
                 </button>
               </div>
               <div className="flex gap-2">
+                <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleRandomDraw}>
+                  <Shuffle size={13} /> Random Draw
+                </button>
                 <button className="btn-ghost flex-1 flex items-center justify-center gap-2 text-xs" onClick={handleAddMainSlot}>
                   <Plus size={13} /> Add Slot
                 </button>
               </div>
+              <button className="w-full btn-ghost flex items-center justify-center gap-2 text-xs text-red-300 border-red-500/30" onClick={handleResetMainDraw}>
+                <RotateCcw size={13} /> Reset Main Draw
+              </button>
               <button className="w-full btn-gold flex items-center justify-center gap-2 text-xs" onClick={() => setShowPublishConfirm(true)}>
                 <Globe size={13} /> Publish Draw
               </button>
@@ -571,6 +604,26 @@ function buildDirectSlotLabel(team: Team, entryRound: DrawRoundName): string {
   if (team.seed) return `Seed #${team.seed}`;
   if (team.ranking) return `Direct ${entryRound} · W${team.ranking}`;
   return `Direct ${entryRound}`;
+}
+
+function buildQualifierMap(pools: Pool[], qualifiersPerPool: number): Map<string, Team> {
+  const map = new Map<string, Team>();
+  const limit = normalizeQualifiersPerPool(qualifiersPerPool);
+
+  pools.forEach(pool => {
+    const rankedTeams = [...pool.slots]
+      .sort((a, b) => a.position - b.position)
+      .filter(slot => slot.team)
+      .slice(0, limit);
+
+    rankedTeams.forEach((slot, index) => {
+      if (slot.team) {
+        map.set(`Q${pool.letter}${index + 1}`, slot.team);
+      }
+    });
+  });
+
+  return map;
 }
 
 function getStartRoundForEntry(entryRound: DrawRoundName): DrawRoundName {
