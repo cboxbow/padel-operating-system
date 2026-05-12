@@ -357,12 +357,14 @@ function buildPublicBracketTeams(
   }
 
   const qualified = pools.flatMap(pool => (
-    calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
+    isPoolComplete(pool, matches.filter(match => match.poolId === pool.id))
+      ? calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
       .slice(0, normalizeQualifiersPerPool(qualifiersPerPool))
       .map((standing, index) => ({
         team: standing.team,
         label: `Q${pool.letter}${index + 1}`,
       }))
+      : []
   ));
   const directIds = new Set(directTeams.map(slot => slot.team?.id));
   const qualifiedSlots = qualified
@@ -444,6 +446,20 @@ function getPublicByeWinner(match: PublicMatch): PublicSlot | undefined {
   if (first.isBye && !second.isBye) return { ...second, position: match.matchNumber };
   if (second.isBye && !first.isBye) return { ...first, position: match.matchNumber };
   return undefined;
+}
+
+function expectedPoolMatchCount(pool: Pool): number {
+  const teamCount = pool.slots.filter(slot => slot.team).length;
+  return (teamCount * (teamCount - 1)) / 2;
+}
+
+function completedPoolMatchCount(matches: PublicMatchLike[]): number {
+  return matches.filter(match => match.status === 'completed').length;
+}
+
+function isPoolComplete(pool: Pool, matches: PublicMatchLike[]): boolean {
+  const expected = expectedPoolMatchCount(pool);
+  return expected > 0 && matches.length >= expected && completedPoolMatchCount(matches) >= expected;
 }
 
 function calculatePoolStandings(pool: Pool, matches: PublicMatchLike[]) {

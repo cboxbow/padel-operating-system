@@ -14,13 +14,15 @@ export function QualifiedTeamsPage() {
   const tournamentMatches = matches.filter(match => match.tournamentId === selectedTournament?.id && match.poolId);
   const qualifiersPerPool = selectedTournament?.qualifiersPerPool ?? 2;
   const qualified = tournamentPools.flatMap(pool => (
-    calculatePoolStandings(pool, tournamentMatches.filter(match => match.poolId === pool.id))
+    isPoolComplete(pool, tournamentMatches.filter(match => match.poolId === pool.id))
+      ? calculatePoolStandings(pool, tournamentMatches.filter(match => match.poolId === pool.id))
       .slice(0, qualifiersPerPool)
       .map((standing, index) => ({
         pool,
         team: standing.team,
         poolPosition: index + 1,
       }))
+      : []
   ));
 
   const proceedToMainDraw = async () => {
@@ -57,9 +59,25 @@ export function QualifiedTeamsPage() {
 
           {tournamentPools.map(pool => {
             const poolQualified = qualified.filter(item => item.pool.id === pool.id);
+            const poolMatches = tournamentMatches.filter(match => match.poolId === pool.id);
+            const poolComplete = isPoolComplete(pool, poolMatches);
             return (
               <div key={pool.id} className="mt-4">
-                <p className="section-title px-4">{pool.name} - Qualified</p>
+                <div className="flex items-center justify-between px-4">
+                  <p className="section-title mb-0">{pool.name} - Qualified</p>
+                  <span className={cn(
+                    'text-[10px] font-bold uppercase rounded-full border px-2 py-1',
+                    poolComplete ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-mpl-gold border-mpl-gold/30 bg-mpl-gold/10'
+                  )}>
+                    {poolComplete ? 'Complete' : `${completedMatchCount(poolMatches)}/${expectedMatchCount(pool)} matches`}
+                  </span>
+                </div>
+                {!poolComplete && (
+                  <div className="mx-4 mt-3 rounded-xl border border-mpl-border bg-mpl-dark px-3 py-3">
+                    <p className="text-sm font-semibold text-white">Pending pool results</p>
+                    <p className="text-xs text-mpl-gray mt-1">Complete every pool match score before confirming qualified teams.</p>
+                  </div>
+                )}
                 {poolQualified.map(item => (
                   <div key={`${pool.id}-${item.team.id}`} className="flex items-center gap-3 px-4 py-3 border-b border-mpl-border/40">
                     <div className={cn(
@@ -140,4 +158,18 @@ function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Tea
     if (seedDiff !== 0) return seedDiff;
     return (a.team.ranking ?? Number.MAX_SAFE_INTEGER) - (b.team.ranking ?? Number.MAX_SAFE_INTEGER);
   });
+}
+
+function expectedMatchCount(pool: Pool): number {
+  const teamCount = pool.slots.filter(slot => slot.team).length;
+  return (teamCount * (teamCount - 1)) / 2;
+}
+
+function completedMatchCount(matches: { status: string }[]): number {
+  return matches.filter(match => match.status === 'completed').length;
+}
+
+function isPoolComplete(pool: Pool, matches: { status: string }[]): boolean {
+  const expected = expectedMatchCount(pool);
+  return expected > 0 && matches.length >= expected && completedMatchCount(matches) >= expected;
 }

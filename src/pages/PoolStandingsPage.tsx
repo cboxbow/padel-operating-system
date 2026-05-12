@@ -30,11 +30,15 @@ export function PoolStandingsPage() {
 
           {tournamentPools.map(pool => {
             const standings = calculatePoolStandings(pool, tournamentMatches.filter(match => match.poolId === pool.id));
+            const poolMatches = tournamentMatches.filter(match => match.poolId === pool.id);
+            const poolComplete = isPoolComplete(pool, poolMatches);
             return (
               <div key={pool.id} className="mt-4">
                 <div className="flex items-center justify-between px-4 mb-2">
                   <p className="section-title mb-0">{pool.name}</p>
-                  <span className="text-xs text-mpl-gray">{standings.slice(0, qualifiersPerPool).length} qualified</span>
+                  <span className="text-xs text-mpl-gray">
+                    {poolComplete ? `${standings.slice(0, qualifiersPerPool).length} qualified` : `${completedMatchCount(poolMatches)}/${expectedMatchCount(pool)} matches`}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1 px-4 py-1.5 text-[9px] text-mpl-gray font-bold uppercase tracking-widest border-b border-mpl-border">
@@ -50,7 +54,7 @@ export function PoolStandingsPage() {
                     key={standing.team.id}
                     className={cn(
                       'w-full flex items-center gap-1 px-4 py-3 border-b border-mpl-border/40',
-                      index < qualifiersPerPool ? 'border-l-2 border-l-green-500/60 bg-green-500/5' : ''
+                      poolComplete && index < qualifiersPerPool ? 'border-l-2 border-l-green-500/60 bg-green-500/5' : ''
                     )}
                   >
                     <div className={cn(
@@ -63,7 +67,7 @@ export function PoolStandingsPage() {
                     <div className="flex-1 min-w-0 pl-2">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-semibold text-white truncate">{standing.team.name}</p>
-                        {index < qualifiersPerPool && <CheckCircle size={9} className="text-green-400 flex-shrink-0" />}
+                        {poolComplete && index < qualifiersPerPool && <CheckCircle size={9} className="text-green-400 flex-shrink-0" />}
                       </div>
                       <p className="text-[10px] text-mpl-gray">{standing.team.clubName}</p>
                     </div>
@@ -127,4 +131,18 @@ function calculatePoolStandings(pool: Pool, matches: { team1?: Team; team2?: Tea
     if (seedDiff !== 0) return seedDiff;
     return (a.team.ranking ?? Number.MAX_SAFE_INTEGER) - (b.team.ranking ?? Number.MAX_SAFE_INTEGER);
   });
+}
+
+function expectedMatchCount(pool: Pool): number {
+  const teamCount = pool.slots.filter(slot => slot.team).length;
+  return (teamCount * (teamCount - 1)) / 2;
+}
+
+function completedMatchCount(matches: { status: string }[]): number {
+  return matches.filter(match => match.status === 'completed').length;
+}
+
+function isPoolComplete(pool: Pool, matches: { status: string }[]): boolean {
+  const expected = expectedMatchCount(pool);
+  return expected > 0 && matches.length >= expected && completedMatchCount(matches) >= expected;
 }

@@ -103,6 +103,7 @@ export function MainDrawPage() {
   const lockedSlots = editableSlots.filter(s => s.isLocked).length;
   const directSlotCount = editableSlots.filter(s => s.source === 'team').length;
   const qualifierSlots = editableSlots.filter(s => s.source === 'qualifier').length;
+  const incompletePools = tournamentPools.filter(pool => !isPoolComplete(pool, tournamentMatches.filter(match => match.poolId === pool.id)));
   const qualifiedTeamOptions = useMemo(() => (
     Array.from(buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2).values())
   ), [tournamentMatches, tournamentPools, selectedTournament?.qualifiersPerPool]);
@@ -138,6 +139,14 @@ export function MainDrawPage() {
 
   const handleAutoFillQualifiers = () => {
     const qualifiersByCode = buildQualifierMap(tournamentPools, tournamentMatches, selectedTournament?.qualifiersPerPool ?? 2);
+    if (qualifiersByCode.size === 0 || incompletePools.length > 0) {
+      addToast({
+        type: 'warning',
+        title: 'Pool Results Pending',
+        message: 'Complete all pool match scores before filling qualified teams into the main draw.',
+      });
+      return;
+    }
     setSlots(prev => prev.map(slot => {
       if (slot.source !== 'qualifier' || !slot.placeholder) return slot;
       const team = qualifiersByCode.get(slot.placeholder);
@@ -500,7 +509,9 @@ export function MainDrawPage() {
               {swapTarget?.source === 'qualifier' && swapTarget.placeholder && (
                 <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
                   <p className="text-xs font-bold text-cyan-300">{swapTarget.placeholder}</p>
-                  <p className="text-[11px] text-mpl-gray">Use Auto Fill Qualif or choose the qualified team manually.</p>
+                  <p className="text-[11px] text-mpl-gray">
+                    {incompletePools.length > 0 ? 'Pending pool results before official qualifiers are available.' : 'Use Auto Fill Qualif or choose the qualified team manually.'}
+                  </p>
                 </div>
               )}
               <button
@@ -664,6 +675,9 @@ function buildQualifierMap(pools: Pool[], matches: ScheduledMatch[], qualifiersP
   const limit = normalizeQualifiersPerPool(qualifiersPerPool);
 
   pools.forEach(pool => {
+    const poolMatches = matches.filter(match => match.poolId === pool.id);
+    if (!isPoolComplete(pool, poolMatches)) return;
+
     const rankedTeams = calculatePoolStandings(pool, matches.filter(match => match.poolId === pool.id))
       .slice(0, limit);
 
@@ -673,6 +687,20 @@ function buildQualifierMap(pools: Pool[], matches: ScheduledMatch[], qualifiersP
   });
 
   return map;
+}
+
+function expectedPoolMatchCount(pool: Pool): number {
+  const teamCount = pool.slots.filter(slot => slot.team).length;
+  return (teamCount * (teamCount - 1)) / 2;
+}
+
+function completedPoolMatchCount(matches: ScheduledMatch[]): number {
+  return matches.filter(match => match.status === 'completed').length;
+}
+
+function isPoolComplete(pool: Pool, matches: ScheduledMatch[]): boolean {
+  const expected = expectedPoolMatchCount(pool);
+  return expected > 0 && matches.length >= expected && completedPoolMatchCount(matches) >= expected;
 }
 
 function calculatePoolStandings(pool: Pool, matches: ScheduledMatch[]) {
