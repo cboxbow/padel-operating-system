@@ -58,9 +58,14 @@ export function MainDrawPage() {
   const poolSignature = tournamentPools.map(pool => `${pool.id}:${pool.letter}`).join('|');
 
   useEffect(() => {
-    setSlots(buildMainDrawSlots(tournamentRegistrations, tournamentPools, selectedTournament?.competitionMode));
+    setSlots(buildMainDrawSlots(
+      tournamentRegistrations,
+      tournamentPools,
+      selectedTournament?.competitionMode,
+      selectedTournament?.qualifiersPerPool ?? 2,
+    ));
     setDrawStatus('draft');
-  }, [selectedTournament?.id, selectedTournament?.competitionMode, teamSignature, poolSignature]);
+  }, [selectedTournament?.id, selectedTournament?.competitionMode, selectedTournament?.qualifiersPerPool, teamSignature, poolSignature]);
 
   const columns = useMemo(() => buildDrawColumns(slots), [slots]);
   const editableSlots = slots.filter(slot => slot.source !== 'advance');
@@ -443,6 +448,7 @@ function buildMainDrawSlots(
   registrations: Registration[],
   pools: Pool[],
   competitionMode?: 'main_draw_direct' | 'qualification_phase',
+  qualifiersPerPool = 2,
 ): MainDrawSlot[] {
   const directRegistrations = registrations
     .filter(reg => getDrawEntry(reg.notes) !== 'QUALIF')
@@ -460,8 +466,9 @@ function buildMainDrawSlots(
   });
 
   if (competitionMode === 'qualification_phase' && pools.length > 0) {
+    const qualifyingRanks = Array.from({ length: normalizeQualifiersPerPool(qualifiersPerPool) }, (_, index) => index + 1);
     pools.forEach(pool => {
-      [1, 2].forEach(rank => {
+      qualifyingRanks.forEach(rank => {
         slots.push(createEntrySlot(
           earliestRound,
           nextPosition(roundPositions, earliestRound),
@@ -483,6 +490,10 @@ function buildMainDrawSlots(
   }
 
   return slots.sort(sortSlotsByRound);
+}
+
+function normalizeQualifiersPerPool(value: number): number {
+  return Math.max(1, Math.min(4, Math.floor(value) || 2));
 }
 
 function buildDrawColumns(slots: MainDrawSlot[]): DrawColumn[] {

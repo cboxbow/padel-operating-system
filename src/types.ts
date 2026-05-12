@@ -57,6 +57,7 @@ export interface Tournament {
   category: 'open' | 'pro' | 'amateur' | 'junior' | 'senior';
   status: TournamentStatus;
   competitionMode: CompetitionMode;
+  qualifiersPerPool: number;
   startDate: string;
   endDate: string;
   venue: string;

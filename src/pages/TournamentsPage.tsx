@@ -24,6 +24,7 @@ export function TournamentsPage() {
     category: 'open' as Tournament['category'],
     status: 'draft' as Tournament['status'],
     competitionMode: 'main_draw_direct' as Tournament['competitionMode'],
+    qualifiersPerPool: '2',
   });
 
   const filtered = tournaments.filter(t => {
@@ -56,6 +57,7 @@ export function TournamentsPage() {
         category: form.category,
         status: form.status,
         competitionMode: form.competitionMode,
+        qualifiersPerPool: parseInt(form.qualifiersPerPool, 10) || 2,
       });
       addToast({ type: 'success', title: 'Tournament Created', message: form.name.trim() });
       setShowCreate(false);
@@ -69,6 +71,7 @@ export function TournamentsPage() {
         category: 'open',
         status: 'draft',
         competitionMode: 'main_draw_direct',
+        qualifiersPerPool: '2',
       });
     } catch (error) {
       addToast({
@@ -189,6 +192,21 @@ export function TournamentsPage() {
               <option value="qualification_phase">Phase Qualifs</option>
             </select>
           </div>
+          {form.competitionMode === 'qualification_phase' && (
+            <div>
+              <label className="section-title">Qualifiers per Pool</label>
+              <select
+                className="input-field"
+                value={form.qualifiersPerPool}
+                onChange={e => setForm(prev => ({ ...prev, qualifiersPerPool: e.target.value }))}
+              >
+                <option value="1">Top 1 qualifies</option>
+                <option value="2">Top 2 qualify</option>
+                <option value="3">Top 3 qualify</option>
+                <option value="4">Top 4 qualify</option>
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="section-title">Event</label>
