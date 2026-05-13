@@ -43,9 +43,9 @@ export function OBSPoolsPage() {
       {tournamentPools.length === 0 ? (
         <OBSNotice title="Pools not generated yet" message="Generate or publish pools to show the OBS pool view." />
       ) : (
-        <div className="grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden">
+        <div className="grid h-full grid-rows-[auto_1fr] gap-2 overflow-hidden sm:gap-3">
           <OBSPoolGroupsRail pools={tournamentPools} />
-          <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
+          <div className="flex min-h-0 flex-col gap-2 overflow-hidden sm:gap-3">
             {tournamentPools.map(pool => (
               <OBSPoolCard
                 key={pool.id}
@@ -85,8 +85,8 @@ export function OBSScoresPage() {
       {tournamentMatches.length === 0 ? (
         <OBSNotice title="No matches yet" message="Generate pool or main draw matches to show live scoring." />
       ) : (
-        <div className="grid h-full grid-cols-[0.85fr_1.15fr] gap-4 overflow-hidden">
-          <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-4">
+        <div className="grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden lg:grid-cols-[0.85fr_1.15fr] lg:grid-rows-none lg:gap-4">
+          <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">
@@ -106,7 +106,7 @@ export function OBSScoresPage() {
             {featuredMatch && <OBSScoreboardMatch match={featuredMatch} allMatches={tournamentMatches} large />}
           </section>
 
-          <section className="grid min-w-0 grid-rows-2 gap-4 overflow-hidden">
+          <section className="grid min-w-0 grid-rows-2 gap-3 overflow-hidden lg:gap-4">
             <OBSScoreList title="Recent Results" matches={recentMatches} allMatches={tournamentMatches} empty="No completed matches yet" scroll />
             <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} allMatches={tournamentMatches} empty="No upcoming matches" scroll />
           </section>
@@ -128,19 +128,19 @@ function OBSFrame({
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#030303] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(212,175,55,0.12),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_38%)]" />
-      <header className="relative z-10 flex items-center gap-4 border-b border-mpl-gold/25 bg-black/90 px-8 py-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold">
-          <Trophy size={26} />
+      <header className="relative z-10 flex items-center gap-2 border-b border-mpl-gold/25 bg-black/90 px-3 py-2 sm:gap-4 sm:px-8 sm:py-3">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold sm:h-12 sm:w-12">
+          <Trophy size={24} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-3xl font-black leading-none tracking-wide">{title}</p>
-          <p className="mt-1 text-xs font-black uppercase tracking-[0.36em] text-mpl-gold">{subtitle}</p>
+          <p className="truncate text-[clamp(1.35rem,8vw,1.875rem)] font-black leading-none tracking-wide sm:text-3xl">{title}</p>
+          <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gold sm:text-xs sm:tracking-[0.36em]">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-green-500/35 bg-green-500/10 px-5 py-2 text-xs font-black uppercase tracking-[0.26em] text-green-300">
+        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-green-500/35 bg-green-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-green-300 sm:gap-2 sm:px-5 sm:text-xs sm:tracking-[0.26em]">
           <Radio size={14} /> OBS Live
         </div>
       </header>
-      <main className="relative z-10 min-h-0 flex-1 p-5">{children}</main>
+      <main className="relative z-10 min-h-0 flex-1 p-2.5 sm:p-5">{children}</main>
     </div>
   );
 }
@@ -316,15 +316,15 @@ function OBSPoolCard({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] 
 
 function OBSPoolGroupsRail({ pools }: { pools: Pool[] }) {
   return (
-    <section className="grid min-h-0 grid-cols-4 gap-3 overflow-hidden">
+    <section className="grid min-h-0 grid-cols-2 gap-2 overflow-hidden lg:grid-cols-4 lg:gap-3">
       {pools.map(pool => {
         const teams = pool.slots
           .filter(slot => slot.team)
           .sort((a, b) => a.position - b.position);
         return (
-          <div key={pool.id} className="min-w-0 rounded-xl border border-mpl-gold/25 bg-black/75 p-2.5 shadow-xl">
+          <div key={pool.id} className="min-w-0 rounded-xl border border-mpl-gold/25 bg-black/75 p-2 shadow-xl sm:p-2.5">
             <div className="mb-1.5 flex items-center justify-between border-b border-mpl-gold/25 pb-1">
-              <p className="text-[13px] font-black uppercase leading-none text-mpl-gold">Group {pool.letter}</p>
+              <p className="text-[11px] font-black uppercase leading-none text-mpl-gold sm:text-[13px]">Group {pool.letter}</p>
               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">{teams.length} teams</p>
             </div>
             <div className="grid gap-y-0.5">
@@ -333,7 +333,7 @@ function OBSPoolGroupsRail({ pools }: { pools: Pool[] }) {
                   <span className="flex h-4 w-4 items-center justify-center rounded bg-mpl-gold text-[8px] font-black text-black">
                     {slot.position}
                   </span>
-                  <span className="min-w-0 text-[9px] font-black uppercase leading-tight text-white">
+                  <span className="min-w-0 truncate text-[8px] font-black uppercase leading-tight text-white sm:text-[9px]">
                     {slot.team?.name}
                   </span>
                 </div>
@@ -520,22 +520,22 @@ function OBSScoreTeam({
 
   return (
     <div className={cn(
-      'grid items-center gap-3 rounded-xl border bg-black/35',
-      large ? 'grid-cols-[56px_1fr_repeat(3,64px)] px-4 py-4' : 'grid-cols-[34px_1fr_repeat(3,34px)] px-2 py-2',
+      'grid items-center gap-2 rounded-xl border bg-black/35 sm:gap-3',
+      large ? 'grid-cols-[46px_1fr_repeat(3,42px)] px-3 py-3 sm:grid-cols-[56px_1fr_repeat(3,64px)] sm:px-4 sm:py-4' : 'grid-cols-[34px_1fr_repeat(3,34px)] px-2 py-2',
       winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border'
     )}>
       <div className={cn(
         'flex items-center justify-center rounded-lg font-black',
-        large ? 'h-12 w-12 text-base' : 'h-8 w-8 text-xs',
+        large ? 'h-11 w-11 text-sm sm:h-12 sm:w-12 sm:text-base' : 'h-8 w-8 text-xs',
         winner || team?.seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
       )}>
         {team?.seed ? `#${team.seed}` : winner ? <Trophy size={large ? 23 : 15} /> : '-'}
       </div>
       <div className="min-w-0">
-        <p className={cn('truncate font-black leading-tight', large ? 'text-3xl' : 'text-sm', winner ? 'text-mpl-gold' : 'text-white')}>
+        <p className={cn('truncate font-black leading-tight', large ? 'text-[clamp(1rem,4.5vw,1.875rem)] sm:text-3xl' : 'text-sm', winner ? 'text-mpl-gold' : 'text-white')}>
           {getScoreTeamLabel(match, side, allMatches)}
         </p>
-        <p className={cn('truncate font-bold uppercase tracking-[0.18em] text-mpl-gray', large ? 'text-xs' : 'text-[8px]')}>{team?.clubName ?? 'Awaiting team'}</p>
+        <p className={cn('truncate font-bold uppercase tracking-[0.16em] text-mpl-gray', large ? 'text-[10px] sm:text-xs' : 'text-[8px]')}>{team?.clubName ?? 'Awaiting team'}</p>
       </div>
       {[0, 1, 2].map(index => {
         const set = sets[index];
@@ -546,7 +546,7 @@ function OBSScoreTeam({
             key={index}
             className={cn(
               'flex items-center justify-center rounded-lg border font-black',
-              large ? 'h-12 text-3xl' : 'h-8 text-sm',
+              large ? 'h-11 text-xl sm:h-12 sm:text-3xl' : 'h-8 text-sm',
               won ? 'border-mpl-gold bg-mpl-gold/15 text-mpl-gold' : 'border-mpl-border text-mpl-gray'
             )}
           >
@@ -571,9 +571,9 @@ function OBSScoreList({ title, matches, allMatches, empty, scroll = false }: { t
   );
 
   return (
-    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-4">
+    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
-        <p className="text-[13px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-mpl-gold sm:text-[13px] sm:tracking-[0.26em]">{title}</p>
         <span className="rounded-full border border-mpl-border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-mpl-gray">{matches.length}</span>
       </div>
       {shouldScroll ? (
@@ -593,7 +593,7 @@ function OBSScoreList({ title, matches, allMatches, empty, scroll = false }: { t
 
 function OBSScoreListItem({ match, allMatches }: { match: ScheduledMatch; allMatches: ScheduledMatch[] }) {
   return (
-    <div className="rounded-xl border border-mpl-border bg-black/40 px-3 py-2 shadow-xl">
+    <div className="rounded-xl border border-mpl-border bg-black/40 px-2.5 py-2 shadow-xl sm:px-3">
       <div className="mb-1.5 flex justify-between text-[9px] font-black uppercase tracking-[0.22em] text-mpl-gray">
         <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
         <span className={cn(match.status === 'completed' ? 'text-green-300' : 'text-mpl-gold')}>{match.status}</span>
@@ -606,9 +606,9 @@ function OBSScoreListItem({ match, allMatches }: { match: ScheduledMatch; allMat
 
 function OBSScoreMiniLine({ label, winner, score }: { label: string; winner: boolean; score?: string }) {
   return (
-    <div className="grid grid-cols-[1fr_68px] items-center gap-3 text-[13px] leading-tight">
+    <div className="grid grid-cols-[1fr_44px] items-center gap-2 text-[11px] leading-tight sm:grid-cols-[1fr_68px] sm:gap-3 sm:text-[13px]">
       <span className={cn('truncate font-black', winner ? 'text-mpl-gold' : 'text-white')}>{label}</span>
-      <span className={cn('text-right text-[12px] font-black', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>{score ?? '-'}</span>
+      <span className={cn('text-right text-[10px] font-black sm:text-[12px]', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>{score ?? '-'}</span>
     </div>
   );
 }
