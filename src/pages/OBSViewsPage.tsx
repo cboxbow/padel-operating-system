@@ -676,28 +676,28 @@ function OBSChampionPanel({
       <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">Tournament completed</p>
-          <p className="text-2xl font-black text-mpl-gold sm:text-4xl">Champion</p>
+          <p className="text-2xl font-black leading-none text-mpl-gold sm:text-3xl lg:text-4xl">Champion</p>
         </div>
         <span className="rounded-full border border-green-500/35 bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-green-300">
           Final
         </span>
       </div>
 
-      <div className="rounded-2xl border border-mpl-gold bg-mpl-gold/15 p-3 shadow-gold sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black sm:h-20 sm:w-20">
-            <Trophy size={34} />
+      <div className="rounded-2xl border border-mpl-gold bg-mpl-gold/15 p-3 shadow-gold sm:p-4 lg:p-5">
+        <div className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[72px_minmax(0,1fr)_92px] lg:grid-cols-[96px_minmax(0,1fr)_130px] lg:gap-5">
+          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black sm:h-[72px] sm:w-[72px] lg:h-24 lg:w-24">
+            <Trophy size={34} className="lg:h-12 lg:w-12" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[9px] font-black uppercase tracking-[0.28em] text-mpl-gold">Winner</p>
-            <p className="max-h-16 overflow-hidden text-2xl font-black uppercase leading-tight text-white sm:text-5xl">
+            <p className="max-h-[5.8rem] overflow-hidden text-[clamp(1.45rem,5vw,2.75rem)] font-black uppercase leading-[0.92] text-white lg:max-h-[8.2rem] lg:text-[clamp(2.5rem,4.3vw,4.9rem)]">
               {winner.name}
             </p>
             <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-mpl-gray">{winner.clubName}</p>
           </div>
           <div className="text-right">
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">Final</p>
-            <p className="text-xl font-black text-mpl-gold sm:text-3xl">{formatSets(finalMatch.sets, winnerSide) ?? '-'}</p>
+            <p className="text-xl font-black text-mpl-gold sm:text-2xl lg:text-4xl">{formatSets(finalMatch.sets, winnerSide) ?? '-'}</p>
           </div>
         </div>
       </div>
@@ -707,9 +707,9 @@ function OBSChampionPanel({
           <div className="grid grid-cols-[1fr_54px] items-center gap-3">
             <div className="min-w-0">
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">Runner-up</p>
-              <p className="truncate text-sm font-black uppercase text-white sm:text-xl">{runnerUp.name}</p>
+              <p className="truncate text-sm font-black uppercase text-white sm:text-lg lg:text-xl">{runnerUp.name}</p>
             </div>
-            <p className="text-right text-lg font-black text-mpl-gray">{formatSets(finalMatch.sets, runnerSide) ?? '-'}</p>
+            <p className="text-right text-lg font-black text-mpl-gray lg:text-2xl">{formatSets(finalMatch.sets, runnerSide) ?? '-'}</p>
           </div>
         </div>
       )}
