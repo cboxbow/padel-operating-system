@@ -21,29 +21,7 @@ export function OBSMainDrawPage() {
       {mainMatches.length === 0 ? (
         <OBSNotice title="Main Draw not live yet" message="Publish the main draw to generate the OBS bracket." />
       ) : (
-        <div
-          className="grid h-full gap-3 overflow-hidden"
-          style={{ gridTemplateColumns: `repeat(${rounds.length}, minmax(0, 1fr))` }}
-        >
-          {rounds.map(round => {
-            const roundMatches = mainMatches.filter(match => match.round === round);
-            return (
-              <section key={round} className="min-w-0 overflow-hidden">
-                <div className="mb-2 flex items-end justify-between border-b border-mpl-gold/25 pb-1.5">
-                  <div>
-                    <p className="text-lg font-black leading-none text-mpl-gold">{roundLabel(roundMatches.length)}</p>
-                    <p className="text-[9px] uppercase tracking-[0.22em] text-mpl-gray">{roundMatches.length} matches</p>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  {roundMatches.map(match => (
-                    <OBSMatchCard key={match.id} match={match} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <OBSFIPBracket rounds={rounds} matches={mainMatches} />
       )}
     </OBSFrame>
   );
@@ -175,34 +153,109 @@ function OBSNotice({ title, message }: { title: string; message: string }) {
   );
 }
 
-function OBSMatchCard({ match }: { match: ScheduledMatch }) {
+function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: ScheduledMatch[] }) {
+  const roundCount = rounds.length;
+  const firstRoundCount = Math.max(1, matches.filter(match => match.round === rounds[0]).length);
+  const nodeHeight = firstRoundCount >= 32 ? 24 : firstRoundCount >= 16 ? 38 : 48;
+  const columnWidth = 100 / roundCount;
+
   return (
-    <div className="rounded-lg border border-mpl-border bg-mpl-card/95 p-1.5 shadow-xl">
-      <div className="mb-1 flex items-center justify-between">
-        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-mpl-gray">M{match.matchNumber}</p>
-        <span className={cn(
-          'rounded-full border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest',
-          match.status === 'completed'
-            ? 'border-green-500/35 bg-green-500/10 text-green-300'
-            : 'border-mpl-gold/30 bg-mpl-gold/10 text-mpl-gold'
-        )}>
-          {match.status === 'completed' ? 'Final' : 'Live'}
-        </span>
+    <div className="relative h-full overflow-hidden rounded-xl bg-black/35 px-3 pb-2 pt-8">
+      <div
+        className="absolute inset-x-3 top-0 grid h-7 gap-3"
+        style={{ gridTemplateColumns: `repeat(${roundCount}, minmax(0, 1fr))` }}
+      >
+        {rounds.map(round => {
+          const matchCount = matches.filter(match => match.round === round).length;
+          return (
+            <div key={round} className="min-w-0 border-b border-mpl-gold/30">
+              <p className="truncate text-sm font-black leading-none text-mpl-gold">{roundLabel(matchCount)}</p>
+              <p className="text-[8px] uppercase tracking-[0.18em] text-mpl-gray">{matchCount} matches</p>
+            </div>
+          );
+        })}
       </div>
-      <OBSTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} seed={match.team1?.seed} score={formatSets(match.sets, 'team1')} />
-      <OBSTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} seed={match.team2?.seed} score={formatSets(match.sets, 'team2')} />
+
+      <div className="absolute inset-x-3 bottom-2 top-9">
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="none">
+          {rounds.slice(0, -1).flatMap((round, roundIndex) => {
+            const roundMatches = matches.filter(match => match.round === round).sort((a, b) => a.matchNumber - b.matchNumber);
+            const nextRound = rounds[roundIndex + 1];
+            const nextRoundMatches = matches.filter(match => match.round === nextRound).sort((a, b) => a.matchNumber - b.matchNumber);
+            return roundMatches.map((match, matchIndex) => {
+              const nextIndex = Math.floor(matchIndex / 2);
+              if (!nextRoundMatches[nextIndex]) return null;
+              const fromX = ((roundIndex + 1) * columnWidth) - 1.1;
+              const toX = ((roundIndex + 1) * columnWidth) + 1.1;
+              const midX = (fromX + toX) / 2;
+              const fromY = bracketCenterPercent(matchIndex, roundIndex, firstRoundCount);
+              const toY = bracketCenterPercent(nextIndex, roundIndex + 1, firstRoundCount);
+              return (
+                <path
+                  key={`${match.id}-${nextRoundMatches[nextIndex].id}`}
+                  d={`M ${fromX} ${fromY} H ${midX} V ${toY} H ${toX}`}
+                  vectorEffect="non-scaling-stroke"
+                  fill="none"
+                  stroke="rgba(222, 185, 56, 0.42)"
+                  strokeWidth="1.2"
+                />
+              );
+            });
+          })}
+        </svg>
+
+        {rounds.map((round, roundIndex) => {
+          const roundMatches = matches.filter(match => match.round === round).sort((a, b) => a.matchNumber - b.matchNumber);
+          return (
+            <div
+              key={round}
+              className="absolute top-0 h-full"
+              style={{
+                left: `${roundIndex * columnWidth}%`,
+                width: `${columnWidth}%`,
+                paddingRight: roundIndex === roundCount - 1 ? 0 : 14,
+              }}
+            >
+              {roundMatches.map((match, matchIndex) => (
+                <div
+                  key={match.id}
+                  className="absolute left-0 right-3"
+                  style={{
+                    top: `${bracketCenterPercent(matchIndex, roundIndex, firstRoundCount)}%`,
+                    height: nodeHeight,
+                    transform: 'translateY(-50%)',
+                  }}
+                >
+                  <OBSFIPMatchCard match={match} />
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function OBSTeamLine({ team, winner, seed, score }: { team?: Team; winner: boolean; seed?: number; score?: string }) {
+function OBSFIPMatchCard({ match }: { match: ScheduledMatch }) {
+  return (
+    <div className="h-full rounded-md border border-mpl-border bg-mpl-card/95 p-0.5 shadow-xl">
+      <div className="flex h-full flex-col gap-0.5">
+        <OBSFIPTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} seed={match.team1?.seed} score={formatSets(match.sets, 'team1')} />
+        <OBSFIPTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} seed={match.team2?.seed} score={formatSets(match.sets, 'team2')} />
+      </div>
+    </div>
+  );
+}
+
+function OBSFIPTeamLine({ team, winner, seed, score }: { team?: Team; winner: boolean; seed?: number; score?: string }) {
   return (
     <div className={cn(
-      'mb-1 flex min-h-[22px] items-center gap-1.5 rounded-md border px-1.5 py-0.5',
+      'flex min-h-0 flex-1 items-center gap-1.5 rounded border px-1.5',
       winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border bg-black/35'
     )}>
       <div className={cn(
-        'flex h-5 w-5 items-center justify-center rounded text-[9px] font-black',
+        'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[8px] font-black',
         winner || seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
       )}>
         {seed ? `#${seed}` : winner ? <Trophy size={10} /> : '-'}
@@ -212,7 +265,7 @@ function OBSTeamLine({ team, winner, seed, score }: { team?: Team; winner: boole
           {team?.name ?? 'TBD'}
         </p>
       </div>
-      {score && <span className="ml-1 text-[9px] font-black text-mpl-gray">{score}</span>}
+      {score && <span className="ml-1 flex-shrink-0 text-[8px] font-black text-mpl-gray">{score}</span>}
     </div>
   );
 }
@@ -374,6 +427,11 @@ function roundLabel(matchCount: number): string {
   if (matchCount === 2) return '1/2';
   if (matchCount === 4) return '1/4';
   return `1/${Math.max(2, matchCount * 2)}`;
+}
+
+function bracketCenterPercent(matchIndex: number, roundIndex: number, firstRoundCount: number): number {
+  const span = Math.pow(2, roundIndex);
+  return (((matchIndex * span) + (span / 2)) / firstRoundCount) * 100;
 }
 
 function formatSets(sets: MatchSet[], side: 'team1' | 'team2'): string | undefined {
