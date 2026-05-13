@@ -235,14 +235,14 @@ function OBSFIPMatchCard({ match }: { match: ScheduledMatch }) {
   return (
     <div className="h-full rounded-lg border border-mpl-border bg-[#151515]/95 p-0.5 shadow-xl">
       <div className="flex h-full flex-col gap-0.5">
-        <OBSFIPTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
-        <OBSFIPTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
+        <OBSFIPTeamLine winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} label={getDrawTeamLabel(match, 'team1')} />
+        <OBSFIPTeamLine winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} label={getDrawTeamLabel(match, 'team2')} />
       </div>
     </div>
   );
 }
 
-function OBSFIPTeamLine({ team, winner, score }: { team?: Team; winner: boolean; score?: string }) {
+function OBSFIPTeamLine({ winner, score, label }: { winner: boolean; score?: string; label: string }) {
   return (
     <div className={cn(
       'flex min-h-0 flex-1 items-center rounded-md border px-2.5',
@@ -250,7 +250,7 @@ function OBSFIPTeamLine({ team, winner, score }: { team?: Team; winner: boolean;
     )}>
       <div className="min-w-0 flex-1">
         <p className={cn('truncate text-[12px] font-black leading-tight tracking-[0.01em]', winner ? 'text-mpl-gold' : 'text-white')}>
-          {team?.name ?? 'TBD'}
+          {label}
         </p>
       </div>
       {score && <span className={cn('ml-2 flex-shrink-0 text-[10px] font-black', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>{score}</span>}
@@ -415,6 +415,12 @@ function roundLabel(matchCount: number): string {
   if (matchCount === 2) return '1/2';
   if (matchCount === 4) return '1/4';
   return `1/${Math.max(2, matchCount * 2)}`;
+}
+
+function getDrawTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2'): string {
+  const team = side === 'team1' ? match.team1 : match.team2;
+  if (team) return team.name;
+  return match.isBye ? 'BYE' : 'TBD';
 }
 
 function bracketCenterPercent(matchIndex: number, roundIndex: number, firstRoundCount: number): number {

@@ -636,7 +636,7 @@ export function MainDrawPage() {
                 className="w-full p-3 rounded-xl border border-dashed border-yellow-500/40 text-yellow-400 text-sm font-semibold hover:bg-yellow-500/10 transition-colors"
                 onClick={() => handleSwapTeam('bye')}
               >
-                BYE / TBD slot
+                BYE slot
               </button>
               <button
                 className="w-full p-3 rounded-xl border border-dashed border-mpl-border text-mpl-gray text-sm hover:border-red-400/50 hover:text-red-400 transition-colors"
@@ -1368,7 +1368,7 @@ function DrawSlotRow({
         {slot.position}
       </div>
       {slot.isBye ? (
-        <span className="flex-1 text-[11px] font-bold text-yellow-400 uppercase tracking-widest">BYE / TBD</span>
+        <span className="flex-1 text-[11px] font-bold text-yellow-400 uppercase tracking-widest">BYE</span>
       ) : slot.team ? (
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-semibold text-white truncate">{slot.team.name}</p>
