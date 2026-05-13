@@ -7,6 +7,7 @@ import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
 import type { PoolSlot, Team } from '../types';
+import { openOBSWindow } from '../obs';
 
 // ─── Draw Room (entry) ────────────────────────────────────────────────────────
 export function DrawRoomPage() {
@@ -391,7 +392,7 @@ export function PoolDrawPage() {
             <div className="px-4 mt-4 space-y-4">
               <button
                 className="w-full btn-ghost flex items-center justify-center gap-2 text-xs border-green-500/30 text-green-300"
-                onClick={() => navigate('obs_pools', selectedTournament?.id)}
+                onClick={() => openOBSWindow('obs_pools', selectedTournament?.id)}
               >
                 <Radio size={13} /> OBS Live
               </button>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CheckCircle, Edit3, AlertTriangle, Clock, Trophy
+  CheckCircle, Edit3, AlertTriangle, Clock, Trophy, Radio
 } from 'lucide-react';
 import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
@@ -8,6 +8,7 @@ import { BackButton, OverrideNoteDialog, GoldDivider, ConfirmDialog } from '../c
 
 import { cn } from '../lib';
 import type { ScheduledMatch, MatchSet } from '../types';
+import { openOBSWindow } from '../obs';
 
 type ScoreEntry = { t1: string; t2: string };
 
@@ -127,6 +128,16 @@ export function MatchScorePage() {
                 {matchesError}
               </div>
             )}
+
+            {/* Pool filter */}
+            <div className="px-4 pt-4">
+              <button
+                className="w-full btn-ghost flex items-center justify-center gap-2 text-xs border-green-500/30 text-green-300"
+                onClick={() => openOBSWindow('obs_scores', selectedTournament?.id)}
+              >
+                <Radio size={13} /> OBS Live Scores
+              </button>
+            </div>
 
             {/* Pool filter */}
             <div className="flex gap-2 px-4 pt-4 pb-3 overflow-x-auto">

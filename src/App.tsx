@@ -15,12 +15,13 @@ import { PoolStandingsPage } from './pages/PoolStandingsPage';
 import { QualifiedTeamsPage } from './pages/QualifiedTeamsPage';
 import { MatchSchedulePage } from './pages/MatchSchedulePage';
 import { PublicPoolsPage, PublicBracketPage } from './pages/PublicViewsPage';
-import { OBSMainDrawPage, OBSPoolsPage } from './pages/OBSViewsPage';
+import { OBSMainDrawPage, OBSPoolsPage, OBSScoresPage } from './pages/OBSViewsPage';
 import { LoginPage } from './pages/LoginPage';
+import { isOBSView } from './obs';
 
 function AppContent() {
   const { currentView } = useAppState();
-  const isOBSView = currentView === 'obs_main_draw' || currentView === 'obs_pools';
+  const isCurrentOBSView = isOBSView(currentView);
 
   const renderView = () => {
     switch (currentView) {
@@ -44,18 +45,19 @@ function AppContent() {
       case 'public_bracket':   return <PublicBracketPage />;
       case 'obs_main_draw':    return <OBSMainDrawPage />;
       case 'obs_pools':        return <OBSPoolsPage />;
+      case 'obs_scores':       return <OBSScoresPage />;
       default:                 return <DashboardPage />;
     }
   };
 
   return (
-    <div className={`flex flex-col h-full bg-mpl-black mx-auto relative overflow-hidden ${isOBSView ? 'max-w-none' : 'max-w-lg'}`}>
+    <div className={`flex flex-col h-full bg-mpl-black mx-auto relative overflow-hidden ${isCurrentOBSView ? 'max-w-none' : 'max-w-lg'}`}>
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-60 z-50" />
       <div className="flex-1 flex flex-col overflow-hidden">
         {renderView()}
       </div>
-      {!isOBSView && <BottomNav />}
-      {!isOBSView && <ToastContainer />}
+      {!isCurrentOBSView && <BottomNav />}
+      {!isCurrentOBSView && <ToastContainer />}
     </div>
   );
 }
@@ -72,6 +74,17 @@ export default function App() {
 
 function AppGate() {
   const { session, profile, profileError, isLoading, signOut } = useAuth();
+  const requestedView = new URLSearchParams(window.location.search).get('view');
+
+  if (isOBSView(requestedView)) {
+    return (
+      <AppStateProvider>
+        <TournamentDataProvider>
+          <AppContent />
+        </TournamentDataProvider>
+      </AppStateProvider>
+    );
+  }
 
   if (isLoading) {
     return (

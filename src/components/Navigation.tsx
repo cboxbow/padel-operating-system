@@ -26,7 +26,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const PHASE2_VIEWS: AppView[] = [
   'match_score', 'pool_standings', 'qualified_teams', 'match_schedule',
-  'public_pools', 'public_bracket', 'obs_main_draw', 'obs_pools',
+  'public_pools', 'public_bracket', 'obs_main_draw', 'obs_pools', 'obs_scores',
 ];
 
 export function BottomNav() {

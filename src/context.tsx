@@ -52,6 +52,7 @@ import { updateTeamSeed } from './data/teams';
 import { addPoolSlot, fetchPools, generatePoolDraw, resetPoolDraw, updatePoolSlotAssignment, updatePoolSlotLock, updatePoolStatus } from './data/pools';
 import { fetchMatches, generatePoolMatchesForTournament, saveMatchScore, updateMatchSchedule } from './data/matches';
 import { supabase } from './supabaseClient';
+import { isOBSView } from './obs';
 
 interface AppState {
   currentView: AppView;
@@ -95,9 +96,10 @@ const AppStateContext = createContext<AppStateContextValue>({
 import { MOCK_TOURNAMENTS } from './mockData';
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
+  const initialRoute = getInitialRouteState();
   const [state, setState] = useState<AppState>({
-    currentView: 'dashboard',
-    selectedTournamentId: null,
+    currentView: initialRoute.currentView,
+    selectedTournamentId: initialRoute.selectedTournamentId,
     selectedTournament: null,
     selectedPoolId: null,
     tournaments: MOCK_TOURNAMENTS,
@@ -233,6 +235,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       {children}
     </AppStateContext.Provider>
   );
+}
+
+function getInitialRouteState(): Pick<AppState, 'currentView' | 'selectedTournamentId'> {
+  const params = new URLSearchParams(window.location.search);
+  const requestedView = params.get('view');
+  const selectedTournamentId = params.get('tournament');
+
+  return {
+    currentView: isOBSView(requestedView) ? requestedView : 'dashboard',
+    selectedTournamentId,
+  };
 }
 
 export function useAppState() {

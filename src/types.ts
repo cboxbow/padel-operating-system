@@ -276,7 +276,8 @@ export type AppView =
   | 'public_pools'
   | 'public_bracket'
   | 'obs_main_draw'
-  | 'obs_pools';
+  | 'obs_pools'
+  | 'obs_scores';
 
 export interface ToastMessage {
   id: string;

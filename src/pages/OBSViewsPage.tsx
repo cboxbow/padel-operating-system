@@ -80,6 +80,59 @@ export function OBSPoolsPage() {
   );
 }
 
+export function OBSScoresPage() {
+  const { navigate, selectedTournament } = useAppState();
+  const { matches } = useTournamentData();
+  const tournamentMatches = matches
+    .filter(match => match.tournamentId === selectedTournament?.id)
+    .sort(sortMatchesForScoreboard);
+  const featuredMatch = tournamentMatches.find(match => match.status === 'ongoing') ??
+    tournamentMatches.find(match => match.status === 'scheduled' && match.team1 && match.team2) ??
+    tournamentMatches.find(match => match.status === 'completed') ??
+    tournamentMatches[0];
+  const recentMatches = tournamentMatches.filter(match => match.status === 'completed').slice(0, 8);
+  const upcomingMatches = tournamentMatches.filter(match => match.status !== 'completed').slice(0, 8);
+
+  return (
+    <OBSFrame
+      title={selectedTournament?.name ?? 'Live Scores'}
+      subtitle="Live Scoring"
+      back={() => navigate('match_score', selectedTournament?.id)}
+    >
+      {tournamentMatches.length === 0 ? (
+        <OBSNotice title="No matches yet" message="Generate pool or main draw matches to show live scoring." />
+      ) : (
+        <div className="grid h-full grid-cols-[1.15fr_0.85fr] gap-3 overflow-hidden">
+          <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-4">
+            <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">
+                  {featuredMatch?.poolId ? 'Pool Match' : 'Main Draw'} - M{featuredMatch?.matchNumber ?? '-'}
+                </p>
+                <p className="text-2xl font-black text-mpl-gold">{featuredMatch?.status === 'completed' ? 'Final Score' : 'Live Match'}</p>
+              </div>
+              <span className={cn(
+                'rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]',
+                featuredMatch?.status === 'completed'
+                  ? 'border-green-500/35 bg-green-500/10 text-green-300'
+                  : 'border-mpl-gold/30 bg-mpl-gold/10 text-mpl-gold'
+              )}>
+                {featuredMatch?.status ?? 'scheduled'}
+              </span>
+            </div>
+            {featuredMatch && <OBSScoreboardMatch match={featuredMatch} large />}
+          </section>
+
+          <section className="grid min-w-0 grid-rows-2 gap-3 overflow-hidden">
+            <OBSScoreList title="Recent Results" matches={recentMatches} empty="No completed matches yet" />
+            <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} empty="No upcoming matches" />
+          </section>
+        </div>
+      )}
+    </OBSFrame>
+  );
+}
+
 function OBSFrame({
   title,
   subtitle,
@@ -224,6 +277,98 @@ function OBSPoolCard({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] 
   );
 }
 
+function OBSScoreboardMatch({ match, large = false }: { match: ScheduledMatch; large?: boolean }) {
+  return (
+    <div className="space-y-2">
+      <OBSScoreTeam team={match.team1} winner={match.winnerId === match.team1?.id} sets={match.sets} side="team1" large={large} />
+      <OBSScoreTeam team={match.team2} winner={match.winnerId === match.team2?.id} sets={match.sets} side="team2" large={large} />
+    </div>
+  );
+}
+
+function OBSScoreTeam({
+  team,
+  winner,
+  sets,
+  side,
+  large,
+}: {
+  team?: Team;
+  winner: boolean;
+  sets: MatchSet[];
+  side: 'team1' | 'team2';
+  large?: boolean;
+}) {
+  return (
+    <div className={cn(
+      'grid items-center gap-3 rounded-xl border bg-black/35',
+      large ? 'grid-cols-[56px_1fr_repeat(3,64px)] px-4 py-4' : 'grid-cols-[34px_1fr_repeat(3,34px)] px-2 py-2',
+      winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border'
+    )}>
+      <div className={cn(
+        'flex items-center justify-center rounded-lg font-black',
+        large ? 'h-12 w-12 text-base' : 'h-8 w-8 text-xs',
+        winner || team?.seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
+      )}>
+        {team?.seed ? `#${team.seed}` : winner ? <Trophy size={large ? 23 : 15} /> : '-'}
+      </div>
+      <div className="min-w-0">
+        <p className={cn('truncate font-black leading-tight', large ? 'text-3xl' : 'text-sm', winner ? 'text-mpl-gold' : 'text-white')}>
+          {team?.name ?? 'TBD'}
+        </p>
+        <p className={cn('truncate font-bold uppercase tracking-[0.18em] text-mpl-gray', large ? 'text-xs' : 'text-[8px]')}>{team?.clubName ?? 'Awaiting team'}</p>
+      </div>
+      {[0, 1, 2].map(index => {
+        const set = sets[index];
+        const score = set ? (side === 'team1' ? set.team1Score : set.team2Score) : '';
+        const won = set ? (side === 'team1' ? set.team1Score > set.team2Score : set.team2Score > set.team1Score) : false;
+        return (
+          <div
+            key={index}
+            className={cn(
+              'flex items-center justify-center rounded-lg border font-black',
+              large ? 'h-12 text-3xl' : 'h-8 text-sm',
+              won ? 'border-mpl-gold bg-mpl-gold/15 text-mpl-gold' : 'border-mpl-border text-mpl-gray'
+            )}
+          >
+            {score}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OBSScoreList({ title, matches, empty }: { title: string; matches: ScheduledMatch[]; empty: string }) {
+  return (
+    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3">
+      <p className="mb-2 border-b border-mpl-gold/25 pb-1.5 text-[11px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
+      <div className="space-y-1.5">
+        {matches.length === 0 && <p className="text-sm font-semibold text-mpl-gray">{empty}</p>}
+        {matches.map(match => (
+          <div key={match.id} className="rounded-lg border border-mpl-border bg-black/35 px-2 py-1.5">
+            <div className="mb-1 flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">
+              <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
+              <span>{match.status}</span>
+            </div>
+            <OBSScoreMiniLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
+            <OBSScoreMiniLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OBSScoreMiniLine({ team, winner, score }: { team?: Team; winner: boolean; score?: string }) {
+  return (
+    <div className="grid grid-cols-[1fr_48px] gap-2 text-[10px]">
+      <span className={cn('truncate font-black', winner ? 'text-mpl-gold' : 'text-white')}>{team?.name ?? 'TBD'}</span>
+      <span className="text-right font-black text-mpl-gray">{score ?? '-'}</span>
+    </div>
+  );
+}
+
 function roundLabel(matchCount: number): string {
   if (matchCount === 1) return 'Final';
   if (matchCount === 2) return '1/2';
@@ -278,4 +423,18 @@ function calculateStandings(pool: Pool, matches: ScheduledMatch[]) {
     if (gameDiff !== 0) return gameDiff;
     return a.initialPosition - b.initialPosition;
   });
+}
+
+function sortMatchesForScoreboard(a: ScheduledMatch, b: ScheduledMatch): number {
+  const statusWeight = (status: ScheduledMatch['status']) => {
+    if (status === 'ongoing') return 0;
+    if (status === 'scheduled') return 1;
+    if (status === 'completed') return 2;
+    return 3;
+  };
+  const statusDiff = statusWeight(a.status) - statusWeight(b.status);
+  if (statusDiff !== 0) return statusDiff;
+  const roundDiff = a.round - b.round;
+  if (roundDiff !== 0) return roundDiff;
+  return a.matchNumber - b.matchNumber;
 }

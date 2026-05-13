@@ -7,6 +7,7 @@ import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
 import { fetchAdminMainDraw, publishMainDraw, unlockMainDraw, type PersistedMainDrawMatch, type PersistedMainDrawSlot } from '../data/mainDraw';
+import { openOBSWindow } from '../obs';
 import type { DrawSlot, MatchSet, Pool, Registration, ScheduledMatch, Team } from '../types';
 
 type DrawRoundName = '1/32' | '1/16' | '1/8' | '1/4' | '1/2' | 'FINAL' | 'WINNER';
@@ -505,7 +506,7 @@ export function MainDrawPage() {
           <div className="px-4 mt-4">
             <button
               className="w-full btn-ghost flex items-center justify-center gap-2 text-xs border-green-500/30 text-green-300"
-              onClick={() => navigate('obs_main_draw', selectedTournament?.id)}
+              onClick={() => openOBSWindow('obs_main_draw', selectedTournament?.id)}
             >
               <Radio size={13} /> OBS Live
             </button>
