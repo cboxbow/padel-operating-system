@@ -76,7 +76,7 @@ export function OBSScoresPage() {
       {tournamentMatches.length === 0 ? (
         <OBSNotice title="No matches yet" message="Generate pool or main draw matches to show live scoring." />
       ) : (
-        <div className="grid h-full grid-cols-[1.15fr_0.85fr] gap-3 overflow-hidden">
+        <div className="grid h-full grid-cols-[0.85fr_1.15fr] gap-4 overflow-hidden">
           <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-4">
             <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
               <div>
@@ -97,7 +97,7 @@ export function OBSScoresPage() {
             {featuredMatch && <OBSScoreboardMatch match={featuredMatch} large />}
           </section>
 
-          <section className="grid min-w-0 grid-rows-2 gap-3 overflow-hidden">
+          <section className="grid min-w-0 grid-rows-2 gap-4 overflow-hidden">
             <OBSScoreList title="Recent Results" matches={recentMatches} empty="No completed matches yet" scroll />
             <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} empty="No upcoming matches" scroll />
           </section>
@@ -382,7 +382,7 @@ function OBSScoreTeam({
 
 function OBSScoreList({ title, matches, empty, scroll = false }: { title: string; matches: ScheduledMatch[]; empty: string; scroll?: boolean }) {
   const shouldScroll = scroll && matches.length > 4;
-  const duration = Math.max(18, matches.length * 3.2);
+  const duration = Math.max(24, matches.length * 4.5);
   const items = (
     <>
       {matches.length === 0 && <p className="text-sm font-semibold text-mpl-gray">{empty}</p>}
@@ -393,21 +393,21 @@ function OBSScoreList({ title, matches, empty, scroll = false }: { title: string
   );
 
   return (
-    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3">
-      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-1.5">
-        <p className="text-[11px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">{matches.length}</span>
+    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-4">
+      <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
+        <p className="text-[13px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
+        <span className="rounded-full border border-mpl-border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-mpl-gray">{matches.length}</span>
       </div>
       {shouldScroll ? (
         <div className="obs-scroll-panel">
-          <div className="obs-scroll-track space-y-1.5" style={{ animationDuration: `${duration}s` }}>
+          <div className="obs-scroll-track space-y-2" style={{ animationDuration: `${duration}s` }}>
             {items}
             <div className="h-2" />
             {items}
           </div>
         </div>
       ) : (
-        <div className="space-y-1.5">{items}</div>
+        <div className="space-y-2">{items}</div>
       )}
     </div>
   );
@@ -415,10 +415,10 @@ function OBSScoreList({ title, matches, empty, scroll = false }: { title: string
 
 function OBSScoreListItem({ match }: { match: ScheduledMatch }) {
   return (
-    <div className="rounded-lg border border-mpl-border bg-black/35 px-2 py-1.5">
-      <div className="mb-1 flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">
+    <div className="rounded-xl border border-mpl-border bg-black/40 px-3 py-2 shadow-xl">
+      <div className="mb-1.5 flex justify-between text-[9px] font-black uppercase tracking-[0.22em] text-mpl-gray">
         <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
-        <span>{match.status}</span>
+        <span className={cn(match.status === 'completed' ? 'text-green-300' : 'text-mpl-gold')}>{match.status}</span>
       </div>
       <OBSScoreMiniLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
       <OBSScoreMiniLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
@@ -428,9 +428,9 @@ function OBSScoreListItem({ match }: { match: ScheduledMatch }) {
 
 function OBSScoreMiniLine({ team, winner, score }: { team?: Team; winner: boolean; score?: string }) {
   return (
-    <div className="grid grid-cols-[1fr_48px] gap-2 text-[10px]">
+    <div className="grid grid-cols-[1fr_68px] items-center gap-3 text-[13px] leading-tight">
       <span className={cn('truncate font-black', winner ? 'text-mpl-gold' : 'text-white')}>{team?.name ?? 'TBD'}</span>
-      <span className="text-right font-black text-mpl-gray">{score ?? '-'}</span>
+      <span className={cn('text-right text-[12px] font-black', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>{score ?? '-'}</span>
     </div>
   );
 }
