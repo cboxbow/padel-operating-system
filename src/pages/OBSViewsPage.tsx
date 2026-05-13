@@ -1,11 +1,10 @@
 import { Trophy, Radio, Users, Swords, TrendingUp } from 'lucide-react';
-import { BackButton } from '../components/UI';
 import { useAppState, useTournamentData } from '../context';
 import { cn } from '../lib';
 import type { MatchSet, Pool, ScheduledMatch, Team } from '../types';
 
 export function OBSMainDrawPage() {
-  const { navigate, selectedTournament } = useAppState();
+  const { selectedTournament } = useAppState();
   const { matches } = useTournamentData();
   const mainMatches = matches
     .filter(match => match.tournamentId === selectedTournament?.id && !match.poolId && match.drawId)
@@ -16,7 +15,6 @@ export function OBSMainDrawPage() {
     <OBSFrame
       title={selectedTournament?.name ?? 'Main Draw'}
       subtitle="Official Main Draw"
-      back={() => navigate('main_draw', selectedTournament?.id)}
     >
       {mainMatches.length === 0 ? (
         <OBSNotice title="Main Draw not live yet" message="Publish the main draw to generate the OBS bracket." />
@@ -28,7 +26,7 @@ export function OBSMainDrawPage() {
 }
 
 export function OBSPoolsPage() {
-  const { navigate, selectedTournament } = useAppState();
+  const { selectedTournament } = useAppState();
   const { pools, matches } = useTournamentData();
   const tournamentPools = pools
     .filter(pool => pool.tournamentId === selectedTournament?.id)
@@ -39,7 +37,6 @@ export function OBSPoolsPage() {
     <OBSFrame
       title={selectedTournament?.name ?? 'Pool Draw'}
       subtitle="Pool Draw & Standings"
-      back={() => navigate('pool_draw', selectedTournament?.id)}
     >
       {tournamentPools.length === 0 ? (
         <OBSNotice title="Pools not generated yet" message="Generate or publish pools to show the OBS pool view." />
@@ -59,7 +56,7 @@ export function OBSPoolsPage() {
 }
 
 export function OBSScoresPage() {
-  const { navigate, selectedTournament } = useAppState();
+  const { selectedTournament } = useAppState();
   const { matches } = useTournamentData();
   const tournamentMatches = matches
     .filter(match => match.tournamentId === selectedTournament?.id)
@@ -75,7 +72,6 @@ export function OBSScoresPage() {
     <OBSFrame
       title={selectedTournament?.name ?? 'Live Scores'}
       subtitle="Live Scoring"
-      back={() => navigate('match_score', selectedTournament?.id)}
     >
       {tournamentMatches.length === 0 ? (
         <OBSNotice title="No matches yet" message="Generate pool or main draw matches to show live scoring." />
@@ -114,30 +110,28 @@ export function OBSScoresPage() {
 function OBSFrame({
   title,
   subtitle,
-  back,
   children,
 }: {
   title: string;
   subtitle: string;
-  back: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col bg-[#050505] text-white">
-      <header className="flex items-center gap-4 border-b border-mpl-gold/25 bg-black px-5 py-2.5">
-        <BackButton onClick={back} />
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black">
-          <Trophy size={24} />
+    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#030303] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(212,175,55,0.12),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_38%)]" />
+      <header className="relative z-10 flex items-center gap-4 border-b border-mpl-gold/25 bg-black/90 px-8 py-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold">
+          <Trophy size={26} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-2xl font-black leading-none tracking-wide">{title}</p>
-          <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.28em] text-mpl-gold">{subtitle}</p>
+          <p className="truncate text-3xl font-black leading-none tracking-wide">{title}</p>
+          <p className="mt-1 text-xs font-black uppercase tracking-[0.36em] text-mpl-gold">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-green-500/35 bg-green-500/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-green-300">
-          <Radio size={13} /> OBS Live
+        <div className="flex items-center gap-2 rounded-full border border-green-500/35 bg-green-500/10 px-5 py-2 text-xs font-black uppercase tracking-[0.26em] text-green-300">
+          <Radio size={14} /> OBS Live
         </div>
       </header>
-      <main className="min-h-0 flex-1 p-3">{children}</main>
+      <main className="relative z-10 min-h-0 flex-1 p-5">{children}</main>
     </div>
   );
 }
@@ -156,27 +150,27 @@ function OBSNotice({ title, message }: { title: string; message: string }) {
 function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: ScheduledMatch[] }) {
   const roundCount = rounds.length;
   const firstRoundCount = Math.max(1, matches.filter(match => match.round === rounds[0]).length);
-  const nodeHeight = firstRoundCount >= 32 ? 24 : firstRoundCount >= 16 ? 38 : 48;
+  const nodeHeight = firstRoundCount >= 32 ? 28 : firstRoundCount >= 16 ? 44 : 56;
   const columnWidth = 100 / roundCount;
 
   return (
-    <div className="relative h-full overflow-hidden rounded-xl bg-black/35 px-3 pb-2 pt-8">
+    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-mpl-gold/20 bg-black/45 px-5 pb-4 pt-12 shadow-2xl">
       <div
-        className="absolute inset-x-3 top-0 grid h-7 gap-3"
+        className="absolute inset-x-5 top-3 grid h-8 gap-5"
         style={{ gridTemplateColumns: `repeat(${roundCount}, minmax(0, 1fr))` }}
       >
         {rounds.map(round => {
           const matchCount = matches.filter(match => match.round === round).length;
           return (
-            <div key={round} className="min-w-0 border-b border-mpl-gold/30">
-              <p className="truncate text-sm font-black leading-none text-mpl-gold">{roundLabel(matchCount)}</p>
-              <p className="text-[8px] uppercase tracking-[0.18em] text-mpl-gray">{matchCount} matches</p>
+            <div key={round} className="min-w-0 border-b border-mpl-gold/35">
+              <p className="truncate text-xl font-black leading-none text-mpl-gold">{roundLabel(matchCount)}</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-mpl-gray">{matchCount} matches</p>
             </div>
           );
         })}
       </div>
 
-      <div className="absolute inset-x-3 bottom-2 top-9">
+      <div className="absolute inset-x-5 bottom-4 top-14">
         <svg className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="none">
           {rounds.slice(0, -1).flatMap((round, roundIndex) => {
             const roundMatches = matches.filter(match => match.round === round).sort((a, b) => a.matchNumber - b.matchNumber);
@@ -185,8 +179,8 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
             return roundMatches.map((match, matchIndex) => {
               const nextIndex = Math.floor(matchIndex / 2);
               if (!nextRoundMatches[nextIndex]) return null;
-              const fromX = ((roundIndex + 1) * columnWidth) - 1.1;
-              const toX = ((roundIndex + 1) * columnWidth) + 1.1;
+              const fromX = ((roundIndex + 1) * columnWidth) - 1.25;
+              const toX = ((roundIndex + 1) * columnWidth) + 1.25;
               const midX = (fromX + toX) / 2;
               const fromY = bracketCenterPercent(matchIndex, roundIndex, firstRoundCount);
               const toY = bracketCenterPercent(nextIndex, roundIndex + 1, firstRoundCount);
@@ -196,8 +190,8 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
                   d={`M ${fromX} ${fromY} H ${midX} V ${toY} H ${toX}`}
                   vectorEffect="non-scaling-stroke"
                   fill="none"
-                  stroke="rgba(222, 185, 56, 0.42)"
-                  strokeWidth="1.2"
+                  stroke="rgba(222, 185, 56, 0.58)"
+                  strokeWidth="1.5"
                 />
               );
             });
@@ -213,13 +207,13 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
               style={{
                 left: `${roundIndex * columnWidth}%`,
                 width: `${columnWidth}%`,
-                paddingRight: roundIndex === roundCount - 1 ? 0 : 14,
+                paddingRight: roundIndex === roundCount - 1 ? 0 : 22,
               }}
             >
               {roundMatches.map((match, matchIndex) => (
                 <div
                   key={match.id}
-                  className="absolute left-0 right-3"
+                  className="absolute left-0 right-5"
                   style={{
                     top: `${bracketCenterPercent(matchIndex, roundIndex, firstRoundCount)}%`,
                     height: nodeHeight,
@@ -239,7 +233,7 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
 
 function OBSFIPMatchCard({ match }: { match: ScheduledMatch }) {
   return (
-    <div className="h-full rounded-md border border-mpl-border bg-mpl-card/95 p-0.5 shadow-xl">
+    <div className="h-full rounded-lg border border-mpl-border bg-[#151515]/95 p-0.5 shadow-xl">
       <div className="flex h-full flex-col gap-0.5">
         <OBSFIPTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} seed={match.team1?.seed} score={formatSets(match.sets, 'team1')} />
         <OBSFIPTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} seed={match.team2?.seed} score={formatSets(match.sets, 'team2')} />
@@ -251,21 +245,21 @@ function OBSFIPMatchCard({ match }: { match: ScheduledMatch }) {
 function OBSFIPTeamLine({ team, winner, seed, score }: { team?: Team; winner: boolean; seed?: number; score?: string }) {
   return (
     <div className={cn(
-      'flex min-h-0 flex-1 items-center gap-1.5 rounded border px-1.5',
+      'flex min-h-0 flex-1 items-center gap-2 rounded-md border px-2',
       winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border bg-black/35'
     )}>
       <div className={cn(
-        'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[8px] font-black',
+        'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[9px] font-black',
         winner || seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
       )}>
-        {seed ? `#${seed}` : winner ? <Trophy size={10} /> : '-'}
+        {seed ? `#${seed}` : winner ? <Trophy size={11} /> : '-'}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-[10px] font-black leading-tight', winner ? 'text-mpl-gold' : 'text-white')}>
+        <p className={cn('truncate text-[12px] font-black leading-tight', winner ? 'text-mpl-gold' : 'text-white')}>
           {team?.name ?? 'TBD'}
         </p>
       </div>
-      {score && <span className="ml-1 flex-shrink-0 text-[8px] font-black text-mpl-gray">{score}</span>}
+      {score && <span className="ml-1 flex-shrink-0 text-[10px] font-black text-mpl-gray">{score}</span>}
     </div>
   );
 }

@@ -51,7 +51,7 @@ function AppContent() {
   };
 
   return (
-    <div className={`flex flex-col h-full bg-mpl-black mx-auto relative overflow-hidden ${isCurrentOBSView ? 'max-w-none' : 'max-w-lg'}`}>
+    <div className={`flex flex-col h-full w-full bg-mpl-black mx-auto relative overflow-hidden ${isCurrentOBSView ? 'max-w-none' : 'max-w-lg'}`}>
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-60 z-50" />
       <div className="flex-1 flex flex-col overflow-hidden">
         {renderView()}
