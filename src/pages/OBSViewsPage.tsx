@@ -235,31 +235,25 @@ function OBSFIPMatchCard({ match }: { match: ScheduledMatch }) {
   return (
     <div className="h-full rounded-lg border border-mpl-border bg-[#151515]/95 p-0.5 shadow-xl">
       <div className="flex h-full flex-col gap-0.5">
-        <OBSFIPTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} seed={match.team1?.seed} score={formatSets(match.sets, 'team1')} />
-        <OBSFIPTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} seed={match.team2?.seed} score={formatSets(match.sets, 'team2')} />
+        <OBSFIPTeamLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
+        <OBSFIPTeamLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
       </div>
     </div>
   );
 }
 
-function OBSFIPTeamLine({ team, winner, seed, score }: { team?: Team; winner: boolean; seed?: number; score?: string }) {
+function OBSFIPTeamLine({ team, winner, score }: { team?: Team; winner: boolean; score?: string }) {
   return (
     <div className={cn(
-      'flex min-h-0 flex-1 items-center gap-2 rounded-md border px-2',
+      'flex min-h-0 flex-1 items-center rounded-md border px-2.5',
       winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border bg-black/35'
     )}>
-      <div className={cn(
-        'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[9px] font-black',
-        winner || seed ? 'bg-gold-gradient text-mpl-black' : 'bg-mpl-border text-mpl-gray'
-      )}>
-        {seed ? `#${seed}` : winner ? <Trophy size={11} /> : '-'}
-      </div>
       <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-[12px] font-black leading-tight', winner ? 'text-mpl-gold' : 'text-white')}>
+        <p className={cn('truncate text-[12px] font-black leading-tight tracking-[0.01em]', winner ? 'text-mpl-gold' : 'text-white')}>
           {team?.name ?? 'TBD'}
         </p>
       </div>
-      {score && <span className="ml-1 flex-shrink-0 text-[10px] font-black text-mpl-gray">{score}</span>}
+      {score && <span className={cn('ml-2 flex-shrink-0 text-[10px] font-black', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>{score}</span>}
     </div>
   );
 }
