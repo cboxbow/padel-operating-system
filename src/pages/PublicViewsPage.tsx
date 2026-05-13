@@ -276,7 +276,7 @@ function PoolTeams({ pool }: { pool: Pool }) {
             {slot.position}
           </div>
           {slot.isEmpty ? (
-            <span className="text-sm text-mpl-gray italic">TBD</span>
+            <span className="text-sm text-mpl-gray italic">Awaiting team</span>
           ) : (
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -383,9 +383,9 @@ function buildPublicBracketTeamsFromDraw(draw: PersistedMainDrawWithTeams): Publ
         return {
           id: `public-empty-${slot.id}`,
           position: slot.position,
-          label: 'TBD',
+          label: slot.isBye ? 'BYE' : 'Awaiting opponent',
           source: 'bye',
-          isBye: true,
+          isBye: slot.isBye,
           isLocked: slot.isLocked,
         };
       }
@@ -436,7 +436,7 @@ function buildPublicBracketFromMatches(matches: ScheduledMatch[]): { size: numbe
   if (matches.length === 0) return { size: 0, rounds: [] };
 
   const roundNumbers = [...new Set(matches.map(match => match.round))].sort((a, b) => a - b);
-  let carriedWinners: Array<Team | undefined> = [];
+  let carriedWinners: Array<{ team?: Team; label: string } | undefined> = [];
   const rounds = roundNumbers.map(roundNumber => {
     const roundMatches = matches
       .filter(match => match.round === roundNumber)
@@ -457,9 +457,9 @@ function buildPublicBracketFromMatches(matches: ScheduledMatch[]): { size: numbe
     };
 
     carriedWinners = roundMatches.map(match => {
-      if (match.winnerId === match.team1?.id) return match.team1;
-      if (match.winnerId === match.team2?.id) return match.team2;
-      return undefined;
+      if (match.team1 && match.winnerId === match.team1.id) return { team: match.team1, label: match.team1.name };
+      if (match.team2 && match.winnerId === match.team2.id) return { team: match.team2, label: match.team2.name };
+      return { label: `Winner M${match.matchNumber}` };
     });
 
     return publicRound;
@@ -469,15 +469,15 @@ function buildPublicBracketFromMatches(matches: ScheduledMatch[]): { size: numbe
   return { size: openingMatchCount * 2, rounds };
 }
 
-function createPublicSlotFromMatchTeam(match: ScheduledMatch, side: 'team1' | 'team2', position: number, fallbackTeam?: Team): PublicSlot {
-  const team = (side === 'team1' ? match.team1 : match.team2) ?? fallbackTeam;
+function createPublicSlotFromMatchTeam(match: ScheduledMatch, side: 'team1' | 'team2', position: number, fallback?: { team?: Team; label: string }): PublicSlot {
+  const team = (side === 'team1' ? match.team1 : match.team2) ?? fallback?.team;
   if (!team) {
     return {
       id: `public-${match.id}-${side}`,
       position,
-      label: match.status === 'completed' && match.winnerId ? 'TBD' : 'Awaiting winner',
+      label: match.isBye ? 'BYE' : fallback?.label ?? 'Awaiting opponent',
       source: 'winner',
-      isBye: false,
+      isBye: match.isBye,
       isLocked: false,
     };
   }
@@ -509,7 +509,7 @@ function createPublicByeSlot(position: number): PublicSlot {
   return {
     id: `public-bye-${position}`,
     position,
-    label: 'BYE / TBD',
+    label: 'BYE',
     source: 'bye',
     isBye: true,
     isLocked: false,

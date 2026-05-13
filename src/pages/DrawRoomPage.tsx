@@ -516,7 +516,7 @@ export function PoolDrawPage() {
                     <Globe size={14} /> Publish Official Pool Draw
                   </button>
                   {pool.slots.some(s => s.isEmpty) && (
-                    <p className="text-xs text-orange-400 text-center">Empty slots will publish as TBD/BYE and can still be edited later.</p>
+                    <p className="text-xs text-orange-400 text-center">Empty slots publish as awaiting team or BYE and can still be edited later.</p>
                   )}
                 </div>
               )}
@@ -595,7 +595,7 @@ export function PoolDrawPage() {
         onClose={() => setShowPublishConfirm(false)}
         onConfirm={() => void handlePublish()}
         title={`Publish ${pool?.name ?? 'Pool'} Draw?`}
-        message="This will make the pool draw official and visible to all players. Empty slots are allowed and will remain editable as TBD/BYE. This action is logged in the audit trail."
+        message="This will make the pool draw official and visible to all players. Empty slots are allowed and will remain editable as awaiting team or BYE. This action is logged in the audit trail."
         confirmLabel="Publish Official Draw"
         variant="gold"
       />

@@ -173,7 +173,7 @@ export function MatchScorePage() {
                         <div className="flex items-center gap-2 min-w-0">
                           {m.winnerId === team?.id && <Trophy size={10} className="text-mpl-gold flex-shrink-0" />}
                           <span className={cn('text-[11px] leading-tight font-semibold truncate', m.winnerId === team?.id ? 'text-mpl-gold' : 'text-white')}>
-                            {team?.name ?? 'TBD'}
+                            {getScoreTeamLabel(m, ti === 0 ? 'team1' : 'team2', tournamentMatches)}
                           </span>
                         </div>
                         {m.sets.length > 0 && (
@@ -216,9 +216,9 @@ export function MatchScorePage() {
             {/* Teams header */}
             <div className="mpl-card p-4">
               <div className="flex items-center justify-between text-sm font-bold">
-                <span className="text-white">{selectedMatch.team1?.name ?? 'TBD'}</span>
+                <span className="text-white">{getScoreTeamLabel(selectedMatch, 'team1', tournamentMatches)}</span>
                 <span className="text-mpl-gray text-xs">vs</span>
-                <span className="text-white text-right">{selectedMatch.team2?.name ?? 'TBD'}</span>
+                <span className="text-white text-right">{getScoreTeamLabel(selectedMatch, 'team2', tournamentMatches)}</span>
               </div>
               <p className="text-xs text-mpl-gray text-center mt-1">
                 {selectedMatch.courtName ?? 'No court assigned'} · Match {selectedMatch.matchNumber}
@@ -308,6 +308,36 @@ export function MatchScorePage() {
       />
     </div>
   );
+}
+
+function getScoreTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): string {
+  const team = side === 'team1' ? match.team1 : match.team2;
+  if (team) return team.name;
+  if (match.isBye) return 'BYE';
+  if (match.poolId) return 'Awaiting team';
+  const sourceMatch = findSourceMatch(match, side, allMatches);
+  return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
+}
+
+function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {
+  const previousRound = Math.max(
+    0,
+    ...allMatches
+      .filter(candidate => candidate.drawId === match.drawId && candidate.round < match.round)
+      .map(candidate => candidate.round)
+  );
+  if (!previousRound) return undefined;
+
+  const currentRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === match.round)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  const currentIndex = currentRoundMatches.findIndex(candidate => candidate.id === match.id);
+  if (currentIndex < 0) return undefined;
+
+  const previousRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === previousRound)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  return previousRoundMatches[(currentIndex * 2) + (side === 'team1' ? 0 : 1)];
 }
 
 function validateScoreEntries(scores: ScoreEntry[]): string | null {

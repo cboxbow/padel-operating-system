@@ -126,7 +126,7 @@ export function MatchSchedulePage() {
                             {m.estimatedDuration && <p className="text-[9px] text-mpl-gray">{m.estimatedDuration}min</p>}
                           </>
                         ) : (
-                          <p className="text-[11px] text-mpl-gray">TBD</p>
+                          <p className="text-[11px] text-mpl-gray">Pending</p>
                         )}
                       </div>
 
@@ -151,9 +151,9 @@ export function MatchSchedulePage() {
                           </span>
                         </div>
                         <div className="space-y-0.5">
-                          <p className="text-[11px] leading-tight font-semibold text-white truncate">{m.team1?.name ?? 'TBD'}</p>
+                          <p className="text-[11px] leading-tight font-semibold text-white truncate">{getScheduleTeamLabel(m, 'team1', tournamentMatches)}</p>
                           <p className="text-[11px] leading-tight font-semibold text-white truncate">
-                            <span className="text-[9px] text-mpl-gray font-normal mr-1">vs</span>{m.team2?.name ?? 'TBD'}
+                            <span className="text-[9px] text-mpl-gray font-normal mr-1">vs</span>{getScheduleTeamLabel(m, 'team2', tournamentMatches)}
                           </p>
                         </div>
                       </div>
@@ -222,4 +222,34 @@ export function MatchSchedulePage() {
       </Modal>
     </div>
   );
+}
+
+function getScheduleTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): string {
+  const team = side === 'team1' ? match.team1 : match.team2;
+  if (team) return team.name;
+  if (match.isBye) return 'BYE';
+  if (match.poolId) return 'Awaiting team';
+  const sourceMatch = findSourceMatch(match, side, allMatches);
+  return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
+}
+
+function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {
+  const previousRound = Math.max(
+    0,
+    ...allMatches
+      .filter(candidate => candidate.drawId === match.drawId && candidate.round < match.round)
+      .map(candidate => candidate.round)
+  );
+  if (!previousRound) return undefined;
+
+  const currentRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === match.round)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  const currentIndex = currentRoundMatches.findIndex(candidate => candidate.id === match.id);
+  if (currentIndex < 0) return undefined;
+
+  const previousRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === previousRound)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  return previousRoundMatches[(currentIndex * 2) + (side === 'team1' ? 0 : 1)];
 }

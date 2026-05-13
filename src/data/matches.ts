@@ -373,7 +373,7 @@ export async function updateMatchSchedule(
       module: 'Match Schedule',
       entity_type: 'match',
       entity_id: match.id,
-      description: `Match ${match.matchNumber} scheduled on Court ${courtNumber ?? 'TBD'} at ${scheduledAt || 'TBD'}.`,
+      description: `Match ${match.matchNumber} scheduled on Court ${courtNumber ?? 'pending'} at ${scheduledAt || 'pending time'}.`,
       admin_id: profileId,
       is_override: false,
       previous_state: {

@@ -547,7 +547,7 @@ export function MainDrawPage() {
                 <Globe size={13} /> Publish Draw
               </button>
               {filledSlots < totalSlots && (
-                <p className="text-xs text-orange-400 text-center">Empty slots are allowed and will publish as TBD/BYE.</p>
+                <p className="text-xs text-orange-400 text-center">Empty slots publish as BYE or awaiting opponent depending on bracket logic.</p>
               )}
             </div>
           )}
