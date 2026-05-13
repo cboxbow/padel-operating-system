@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Users, ClipboardList, Star, GitBranch, Trophy,
-  Lock, Unlock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe, Play
+  Lock, Unlock, ChevronRight, Edit3, TrendingUp, CheckCircle, Clock, Globe, Play, Medal
 } from 'lucide-react';
 import { useAppState, useToast, useTournamentData } from '../context';
 import {
@@ -137,6 +137,14 @@ export function TournamentDetailPage() {
       color: 'text-yellow-400',
       description: 'Enter & correct set-by-set match scores',
       enabled: drawStarted,
+    },
+    {
+      label: 'Draw Ranking',
+      icon: <Medal size={18} />,
+      view: 'draw_ranking',
+      color: 'text-mpl-gold',
+      description: 'Final/provisional ranking from main draw results',
+      enabled: tournamentMatches.some(match => !match.poolId && match.drawId),
     },
     {
       label: 'Pool Standings',

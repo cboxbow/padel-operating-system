@@ -270,6 +270,7 @@ export type AppView =
   | 'audit_logs'
   | 'overrides'
   | 'match_score'
+  | 'draw_ranking'
   | 'pool_standings'
   | 'qualified_teams'
   | 'match_schedule'

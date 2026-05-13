@@ -11,6 +11,7 @@ import { DrawRoomPage, PoolDrawPage } from './pages/DrawRoomPage';
 import { MainDrawPage } from './pages/MainDrawPage';
 import { AuditLogsPage, OverridesPage } from './pages/AuditPages';
 import { MatchScorePage } from './pages/MatchScorePage';
+import { DrawRankingPage } from './pages/DrawRankingPage';
 import { PoolStandingsPage } from './pages/PoolStandingsPage';
 import { QualifiedTeamsPage } from './pages/QualifiedTeamsPage';
 import { MatchSchedulePage } from './pages/MatchSchedulePage';
@@ -38,6 +39,7 @@ function AppContent() {
       case 'overrides':        return <OverridesPage />;
       // Phase 2
       case 'match_score':      return <MatchScorePage />;
+      case 'draw_ranking':     return <DrawRankingPage />;
       case 'pool_standings':   return <PoolStandingsPage />;
       case 'qualified_teams':  return <QualifiedTeamsPage />;
       case 'match_schedule':   return <MatchSchedulePage />;

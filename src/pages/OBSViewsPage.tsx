@@ -77,6 +77,8 @@ export function OBSScoresPage() {
     tournamentMatches[0];
   const recentMatches = tournamentMatches.filter(match => match.status === 'completed');
   const upcomingMatches = tournamentMatches.filter(match => match.status !== 'completed');
+  const finalWinner = getTournamentFinalWinner(tournamentMatches);
+  const showTournamentWinner = finalWinner && upcomingMatches.length === 0;
 
   return (
     <OBSFrame
@@ -88,23 +90,29 @@ export function OBSScoresPage() {
       ) : (
         <div className="grid h-full grid-rows-[auto_auto_1fr] gap-2 overflow-hidden sm:gap-3 lg:grid-cols-[0.85fr_1.15fr] lg:grid-rows-none lg:gap-4">
           <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-3 sm:p-4">
-            <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">
-                  {featuredMatch?.poolId ? 'Pool Match' : 'Main Draw'} - M{featuredMatch?.matchNumber ?? '-'}
-                </p>
-                <p className="text-2xl font-black text-mpl-gold">{featuredMatch?.status === 'completed' ? 'Final Score' : 'Live Match'}</p>
-              </div>
-              <span className={cn(
-                'rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]',
-                featuredMatch?.status === 'completed'
-                  ? 'border-green-500/35 bg-green-500/10 text-green-300'
-                  : 'border-mpl-gold/30 bg-mpl-gold/10 text-mpl-gold'
-              )}>
-                {featuredMatch?.status ?? 'scheduled'}
-              </span>
-            </div>
-            {featuredMatch && <OBSScoreboardMatch match={featuredMatch} allMatches={tournamentMatches} large />}
+            {showTournamentWinner ? (
+              <OBSChampionPanel finalMatch={finalWinner.finalMatch} winner={finalWinner.winner} runnerUp={finalWinner.runnerUp} allMatches={tournamentMatches} />
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">
+                      {featuredMatch?.poolId ? 'Pool Match' : 'Main Draw'} - M{featuredMatch?.matchNumber ?? '-'}
+                    </p>
+                    <p className="text-2xl font-black text-mpl-gold">{featuredMatch?.status === 'completed' ? 'Final Score' : 'Live Match'}</p>
+                  </div>
+                  <span className={cn(
+                    'rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]',
+                    featuredMatch?.status === 'completed'
+                      ? 'border-green-500/35 bg-green-500/10 text-green-300'
+                      : 'border-mpl-gold/30 bg-mpl-gold/10 text-mpl-gold'
+                  )}>
+                    {featuredMatch?.status ?? 'scheduled'}
+                  </span>
+                </div>
+                {featuredMatch && <OBSScoreboardMatch match={featuredMatch} allMatches={tournamentMatches} large />}
+              </>
+            )}
           </section>
 
           <section className="grid min-w-0 grid-rows-2 gap-2 overflow-hidden sm:gap-3 lg:gap-4">
@@ -649,6 +657,70 @@ function OBSScoreboardMatch({ match, allMatches, large = false }: { match: Sched
   );
 }
 
+function OBSChampionPanel({
+  finalMatch,
+  winner,
+  runnerUp,
+  allMatches,
+}: {
+  finalMatch: ScheduledMatch;
+  winner: NonNullable<ScheduledMatch['team1']>;
+  runnerUp?: NonNullable<ScheduledMatch['team1']>;
+  allMatches: ScheduledMatch[];
+}) {
+  const winnerSide = finalMatch.team1?.id === winner.id ? 'team1' : 'team2';
+  const runnerSide = runnerUp && finalMatch.team1?.id === runnerUp.id ? 'team1' : 'team2';
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gray">Tournament completed</p>
+          <p className="text-2xl font-black text-mpl-gold sm:text-4xl">Champion</p>
+        </div>
+        <span className="rounded-full border border-green-500/35 bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-green-300">
+          Final
+        </span>
+      </div>
+
+      <div className="rounded-2xl border border-mpl-gold bg-mpl-gold/15 p-3 shadow-gold sm:p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black sm:h-20 sm:w-20">
+            <Trophy size={34} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-black uppercase tracking-[0.28em] text-mpl-gold">Winner</p>
+            <p className="max-h-16 overflow-hidden text-2xl font-black uppercase leading-tight text-white sm:text-5xl">
+              {winner.name}
+            </p>
+            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-mpl-gray">{winner.clubName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">Final</p>
+            <p className="text-xl font-black text-mpl-gold sm:text-3xl">{formatSets(finalMatch.sets, winnerSide) ?? '-'}</p>
+          </div>
+        </div>
+      </div>
+
+      {runnerUp && (
+        <div className="mt-3 rounded-xl border border-mpl-border bg-black/35 px-3 py-2">
+          <div className="grid grid-cols-[1fr_54px] items-center gap-3">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">Runner-up</p>
+              <p className="truncate text-sm font-black uppercase text-white sm:text-xl">{runnerUp.name}</p>
+            </div>
+            <p className="text-right text-lg font-black text-mpl-gray">{formatSets(finalMatch.sets, runnerSide) ?? '-'}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 hidden sm:block">
+        <OBSScoreListItem match={finalMatch} allMatches={allMatches} />
+      </div>
+    </div>
+  );
+}
+
 function OBSScoreTeam({
   match,
   allMatches,
@@ -792,6 +864,20 @@ function getScoreTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMa
   if (match.isBye) return 'BYE';
   const sourceMatch = findSourceMatch(match, side, allMatches);
   return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
+}
+
+function getTournamentFinalWinner(matches: ScheduledMatch[]): { finalMatch: ScheduledMatch; winner: NonNullable<ScheduledMatch['team1']>; runnerUp?: NonNullable<ScheduledMatch['team1']> } | null {
+  const mainMatches = matches.filter(match => !match.poolId && match.drawId);
+  if (mainMatches.length === 0) return null;
+  const pending = mainMatches.some(match => match.status !== 'completed');
+  if (pending) return null;
+  const finalRound = Math.max(...mainMatches.map(match => match.round));
+  const finalMatch = mainMatches.find(match => match.round === finalRound);
+  if (!finalMatch?.winnerId) return null;
+  const winner = finalMatch.team1?.id === finalMatch.winnerId ? finalMatch.team1 : finalMatch.team2?.id === finalMatch.winnerId ? finalMatch.team2 : undefined;
+  if (!winner) return null;
+  const runnerUp = finalMatch.team1?.id === winner.id ? finalMatch.team2 : finalMatch.team1;
+  return { finalMatch, winner, runnerUp };
 }
 
 function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {
