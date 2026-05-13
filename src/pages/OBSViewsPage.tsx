@@ -306,7 +306,7 @@ function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: Sche
     .filter(slot => slot.team)
     .sort((a, b) => a.position - b.position)
     .map(slot => slot.team!);
-  const codeByPair = buildPoolMatchCodeMap(pool, matches);
+  const matchByPair = buildPoolMatchMap(pool, matches);
   const standings = calculateStandings(pool, matches);
   const rankByTeamId = new Map(standings.map((row, index) => [row.team.id, index + 1]));
   const columns = `minmax(120px, 0.95fr) repeat(${Math.max(1, teams.length)}, minmax(120px, 1fr)) minmax(54px, 0.35fr)`;
@@ -346,10 +346,10 @@ function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: Sche
             </PoolMatrixCell>
             {teams.map((columnTeam, columnIndex) => {
               const isDiagonal = rowIndex === columnIndex;
-              const code = isDiagonal ? '' : codeByPair.get(teamPairKey(rowTeam.id, columnTeam.id));
+              const matchEntry = isDiagonal ? undefined : matchByPair.get(teamPairKey(rowTeam.id, columnTeam.id));
               return (
                 <PoolMatrixCell key={`${rowTeam.id}-${columnTeam.id}`} variant={variant} diagonal={isDiagonal}>
-                  {code ?? '-'}
+                  {matchEntry ? <PoolMatchMatrixValue entry={matchEntry} /> : '-'}
                 </PoolMatrixCell>
               );
             })}
@@ -359,6 +359,29 @@ function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: Sche
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PoolMatchMatrixValue({ entry }: { entry: PoolMatchEntry }) {
+  const score = formatPoolMatrixScore(entry.match);
+  const isLive = entry.match.status === 'ongoing';
+  const isFinal = entry.match.status === 'completed';
+
+  return (
+    <div className="flex w-full min-w-0 items-center justify-center gap-1.5 leading-tight">
+      <span className={cn('font-black', isLive ? 'text-red-600' : isFinal ? 'text-black' : 'text-black')}>
+        {entry.code}
+      </span>
+      {score && (
+        <span className={cn(
+          'min-w-0 font-black',
+          isLive ? 'text-red-600' : isFinal ? 'text-green-700' : 'text-black'
+        )}>
+          {score}
+        </span>
+      )}
+      {isLive && <span className="rounded bg-red-600 px-1 text-[8px] font-black text-white">LIVE</span>}
     </div>
   );
 }
@@ -391,13 +414,27 @@ function PoolMatrixCell({
   );
 }
 
-function buildPoolMatchCodeMap(pool: Pool, matches: ScheduledMatch[]): Map<string, string> {
+type PoolMatchEntry = {
+  code: string;
+  match: ScheduledMatch;
+};
+
+function buildPoolMatchMap(pool: Pool, matches: ScheduledMatch[]): Map<string, PoolMatchEntry> {
   return new Map(
     matches
       .filter(match => match.poolId === pool.id && match.team1 && match.team2)
       .sort((a, b) => a.matchNumber - b.matchNumber)
-      .map((match, index) => [teamPairKey(match.team1!.id, match.team2!.id), `${pool.letter}${index + 1}`])
+      .map((match, index) => [teamPairKey(match.team1!.id, match.team2!.id), { code: `${pool.letter}${index + 1}`, match }])
   );
+}
+
+function formatPoolMatrixScore(match: ScheduledMatch): string {
+  if (match.sets.length === 0) return '';
+  const score = match.sets
+    .filter(set => set.team1Score > 0 || set.team2Score > 0)
+    .map(set => `${set.team1Score}-${set.team2Score}`)
+    .join(' ');
+  return score;
 }
 
 function teamPairKey(teamAId: string, teamBId: string): string {
