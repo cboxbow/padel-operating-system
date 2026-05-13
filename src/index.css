@@ -146,6 +146,88 @@
     animation-iteration-count: infinite;
     will-change: transform;
   }
+
+  .obs-theme {
+    --obs-accent: #2fd486;
+    --obs-accent-soft: rgba(47, 212, 134, 0.22);
+    --obs-accent-border: rgba(47, 212, 134, 0.36);
+    --obs-panel: rgba(13, 24, 18, 0.94);
+    --obs-panel-2: rgba(7, 14, 10, 0.92);
+    --obs-border: rgba(72, 205, 139, 0.24);
+    background:
+      radial-gradient(circle at 85% 10%, rgba(47, 212, 134, 0.12), transparent 28%),
+      linear-gradient(145deg, #03120d 0%, #020705 55%, #000000 100%);
+  }
+
+  .obs-halftone-bg {
+    opacity: 0.72;
+    background:
+      radial-gradient(circle at 78% 18%, rgba(47, 212, 134, 0.34) 0 2px, transparent 2.6px),
+      radial-gradient(circle at 96% 68%, rgba(47, 212, 134, 0.28) 0 3px, transparent 3.8px),
+      linear-gradient(135deg, rgba(47, 212, 134, 0.05), transparent 42%);
+    background-size: 24px 24px, 34px 34px, cover;
+    background-position: 0 0, 8px 10px, 0 0;
+    mask-image: radial-gradient(circle at 82% 36%, black 0%, black 36%, transparent 78%);
+    -webkit-mask-image: radial-gradient(circle at 82% 36%, black 0%, black 36%, transparent 78%);
+  }
+
+  .obs-theme [class*="text-mpl-gold"] {
+    color: var(--obs-accent) !important;
+  }
+
+  .obs-theme [class*="border-mpl-gold"] {
+    border-color: var(--obs-accent-border) !important;
+  }
+
+  .obs-theme [class*="bg-mpl-gold"] {
+    background-color: var(--obs-accent-soft) !important;
+  }
+
+  .obs-theme [class*="bg-mpl-card"] {
+    background-color: var(--obs-panel) !important;
+  }
+
+  .obs-theme [class*="bg-mpl-dark"] {
+    background-color: var(--obs-panel-2) !important;
+  }
+
+  .obs-theme [class*="border-mpl-border"] {
+    border-color: var(--obs-border) !important;
+  }
+
+  .obs-theme [class*="bg-gold-gradient"] {
+    background: linear-gradient(135deg, #2fd486 0%, #9cffc9 100%) !important;
+  }
+
+  .obs-theme [class*="shadow-gold"] {
+    box-shadow: 0 0 28px rgba(47, 212, 134, 0.28) !important;
+  }
+
+  .obs-theme [class*="text-mpl-black"] {
+    color: #02120b !important;
+  }
+
+  .obs-theme header {
+    background: rgba(0, 8, 5, 0.92) !important;
+    border-bottom-color: rgba(47, 212, 134, 0.28) !important;
+  }
+
+  .obs-theme .obs-scroll-panel {
+    height: calc(100% - 38px);
+  }
+
+  @media (max-width: 640px) {
+    .obs-theme .obs-halftone-bg {
+      opacity: 0.5;
+      background-size: 18px 18px, 26px 26px, cover;
+    }
+
+    .obs-theme .obs-scroll-panel {
+      height: calc(100% - 34px);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+    }
+  }
 }
 
 @keyframes obs-scroll-up {

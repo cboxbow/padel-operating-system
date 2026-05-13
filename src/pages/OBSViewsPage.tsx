@@ -126,8 +126,8 @@ function OBSFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-[#030303] text-white">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(212,175,55,0.12),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_38%)]" />
+    <div className="obs-theme relative flex h-screen w-screen flex-col overflow-hidden bg-[#020705] text-white">
+      <div className="obs-halftone-bg pointer-events-none absolute inset-0" />
       <header className="relative z-10 flex items-center gap-2 border-b border-mpl-gold/25 bg-black/90 px-3 py-2 sm:gap-4 sm:px-8 sm:py-3">
         <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold sm:h-12 sm:w-12">
           <Trophy size={24} />
