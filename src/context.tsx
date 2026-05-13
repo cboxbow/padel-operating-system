@@ -140,6 +140,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     void refreshTournaments();
   }, [refreshTournaments]);
 
+  useEffect(() => {
+    if (!isOBSView(state.currentView)) return;
+    const interval = window.setInterval(() => {
+      void refreshTournaments();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [refreshTournaments, state.currentView]);
+
   const navigate = useCallback((view: AppView, tournamentId?: string, poolId?: string) => {
     const tournament = tournamentId
       ? state.tournaments.find(t => t.id === tournamentId) ?? null
@@ -326,6 +335,7 @@ const TournamentDataContext = createContext<TournamentDataContextValue>({
 });
 
 export function TournamentDataProvider({ children }: { children: ReactNode }) {
+  const { currentView } = useAppState();
   const [registrations, setRegistrations] = useState<Registration[]>(MOCK_REGISTRATIONS);
   const [pools, setPools] = useState<Pool[]>(MOCK_POOLS);
   const [standings, setStandings] = useState<PoolStanding[]>(MOCK_STANDINGS);
@@ -409,6 +419,22 @@ export function TournamentDataProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [refreshMatches]);
+
+  useEffect(() => {
+    if (!isOBSView(currentView)) return;
+
+    const refreshOBSData = () => {
+      void refreshMatches();
+      if (currentView === 'obs_pools') {
+        void refreshPools();
+      }
+    };
+
+    refreshOBSData();
+    const interval = window.setInterval(refreshOBSData, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [currentView, refreshMatches, refreshPools]);
 
   const validateRegistration = useCallback(async (regId: string) => {
     const registration = registrations.find(r => r.id === regId);
