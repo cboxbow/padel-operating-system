@@ -308,7 +308,7 @@ function OBSFIPTeamLine({ winner, score, label }: { winner: boolean; score?: str
 
 function OBSPoolCard({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] }) {
   return (
-    <section className="min-h-0 flex-1 overflow-hidden rounded-xl border border-mpl-border bg-[#f6f6f6] text-black shadow-2xl">
+    <section className="min-h-0 flex-1 overflow-hidden rounded-xl border border-mpl-border bg-mpl-card text-white shadow-2xl">
       <PoolMatrixTable pool={pool} matches={matches} variant="obs" />
     </section>
   );
@@ -365,15 +365,15 @@ function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: Sche
   }
 
   return (
-    <div className={cn('h-full min-w-0 overflow-hidden', variant === 'obs' ? 'bg-[#f6f6f6] p-0' : 'rounded-xl border border-mpl-border bg-mpl-dark')}>
+    <div className={cn('h-full min-w-0 overflow-hidden', variant === 'obs' ? 'bg-transparent p-0' : 'rounded-xl border border-mpl-border bg-mpl-dark')}>
       <div className={cn(
-        'border border-black/80 text-center font-semibold uppercase',
-        variant === 'obs' ? 'bg-[#bdbdbd] px-2 py-1 text-[13px] text-black' : 'bg-mpl-border px-2 py-2 text-xs text-white'
+        'border text-center font-semibold uppercase',
+        variant === 'obs' ? 'border-mpl-gold/40 bg-mpl-gold/15 px-2 py-1 text-[13px] text-mpl-gold' : 'border-black/80 bg-mpl-border px-2 py-2 text-xs text-white'
       )}>
         Group {pool.letter}
       </div>
       <div
-        className={cn('grid border-l border-t border-black/80', variant === 'obs' ? 'text-[12px]' : 'min-w-[680px] text-[11px]')}
+        className={cn('grid', variant === 'obs' ? 'border-l border-t border-mpl-gold/25 text-[12px]' : 'min-w-[680px] border-l border-t border-black/80 text-[11px]')}
         style={{ gridTemplateColumns: columns }}
       >
         <PoolMatrixCell variant={variant} header>Teams</PoolMatrixCell>
@@ -415,13 +415,13 @@ function PoolMatchMatrixValue({ entry }: { entry: PoolMatchEntry }) {
 
   return (
     <div className="flex w-full min-w-0 items-center justify-center gap-1.5 leading-tight">
-      <span className={cn('font-black', isLive ? 'text-red-600' : isFinal ? 'text-black' : 'text-black')}>
+      <span className={cn('font-black', isLive ? 'text-red-500' : isFinal ? 'text-mpl-gold' : 'text-white')}>
         {entry.code}
       </span>
       {score && (
         <span className={cn(
           'min-w-0 font-black',
-          isLive ? 'text-red-600' : isFinal ? 'text-green-700' : 'text-black'
+          isLive ? 'text-red-500' : isFinal ? 'text-mpl-gold' : 'text-white'
         )}>
           {score}
         </span>
@@ -448,9 +448,17 @@ function PoolMatrixCell({
     <div
       title={title}
       className={cn(
-        'min-w-0 border-b border-r border-black/80 px-1.5 py-1 leading-tight',
+        'min-w-0 border-b border-r px-1.5 py-1 leading-tight',
         variant === 'obs' ? 'flex min-h-[22px] items-center justify-center whitespace-normal break-words text-[clamp(8px,0.56vw,11px)]' : 'h-[30px] truncate text-[11px]',
-        diagonal ? 'bg-[#626262] text-[#626262]' : variant === 'obs' ? 'bg-white text-black' : 'bg-mpl-black text-white',
+        variant === 'obs'
+          ? diagonal
+            ? 'border-mpl-gold/20 bg-mpl-gold/10 text-transparent'
+            : header
+              ? 'border-mpl-gold/25 bg-black/50 text-white'
+              : 'border-mpl-gold/25 bg-black/35 text-white'
+          : diagonal
+            ? 'border-black/80 bg-[#626262] text-[#626262]'
+            : 'border-black/80 bg-mpl-black text-white',
         header ? 'justify-start text-left font-semibold' : 'text-center font-medium'
       )}
     >

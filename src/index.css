@@ -148,27 +148,26 @@
   }
 
   .obs-theme {
-    --obs-accent: #2fd486;
-    --obs-accent-soft: rgba(47, 212, 134, 0.22);
-    --obs-accent-border: rgba(47, 212, 134, 0.36);
+    --obs-accent: #4ad569;
+    --obs-accent-soft: rgba(74, 213, 105, 0.22);
+    --obs-accent-border: rgba(74, 213, 105, 0.38);
     --obs-panel: rgba(13, 24, 18, 0.94);
     --obs-panel-2: rgba(7, 14, 10, 0.92);
-    --obs-border: rgba(72, 205, 139, 0.24);
+    --obs-border: rgba(74, 213, 105, 0.24);
     background:
-      radial-gradient(circle at 85% 10%, rgba(47, 212, 134, 0.12), transparent 28%),
+      radial-gradient(circle at 85% 10%, rgba(74, 213, 105, 0.16), transparent 28%),
       linear-gradient(145deg, #03120d 0%, #020705 55%, #000000 100%);
   }
 
   .obs-halftone-bg {
-    opacity: 0.72;
+    opacity: 0.78;
     background:
-      radial-gradient(circle at 78% 18%, rgba(47, 212, 134, 0.34) 0 2px, transparent 2.6px),
-      radial-gradient(circle at 96% 68%, rgba(47, 212, 134, 0.28) 0 3px, transparent 3.8px),
-      linear-gradient(135deg, rgba(47, 212, 134, 0.05), transparent 42%);
-    background-size: 24px 24px, 34px 34px, cover;
-    background-position: 0 0, 8px 10px, 0 0;
-    mask-image: radial-gradient(circle at 82% 36%, black 0%, black 36%, transparent 78%);
-    -webkit-mask-image: radial-gradient(circle at 82% 36%, black 0%, black 36%, transparent 78%);
+      linear-gradient(135deg, rgba(74, 213, 105, 0.08), transparent 38%),
+      url('/obs-dot-design.png');
+    background-repeat: no-repeat;
+    background-size: cover, min(86vw, 900px) auto;
+    background-position: center, right -8vw bottom -18vh;
+    filter: drop-shadow(0 0 28px rgba(74, 213, 105, 0.26));
   }
 
   .obs-theme [class*="text-mpl-gold"] {
@@ -196,11 +195,11 @@
   }
 
   .obs-theme [class*="bg-gold-gradient"] {
-    background: linear-gradient(135deg, #2fd486 0%, #9cffc9 100%) !important;
+    background: linear-gradient(135deg, #4ad569 0%, #b8ffc8 100%) !important;
   }
 
   .obs-theme [class*="shadow-gold"] {
-    box-shadow: 0 0 28px rgba(47, 212, 134, 0.28) !important;
+    box-shadow: 0 0 28px rgba(74, 213, 105, 0.28) !important;
   }
 
   .obs-theme [class*="text-mpl-black"] {
@@ -218,8 +217,9 @@
 
   @media (max-width: 640px) {
     .obs-theme .obs-halftone-bg {
-      opacity: 0.5;
-      background-size: 18px 18px, 26px 26px, cover;
+      opacity: 0.55;
+      background-size: cover, 145vw auto;
+      background-position: center, right -42vw bottom -8vh;
     }
 
     .obs-theme .obs-scroll-panel {
