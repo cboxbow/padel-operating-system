@@ -45,7 +45,7 @@ export function OBSPoolsPage() {
       ) : (
         <div className="grid h-full grid-rows-[auto_1fr] gap-2 overflow-hidden sm:gap-3">
           <OBSPoolGroupsRail pools={tournamentPools} />
-          <div className="flex min-h-0 flex-col gap-2 overflow-hidden sm:gap-3">
+          <div className="hidden min-h-0 flex-col gap-2 overflow-hidden sm:flex sm:gap-3">
             {tournamentPools.map(pool => (
               <OBSPoolCard
                 key={pool.id}
@@ -54,6 +54,7 @@ export function OBSPoolsPage() {
               />
             ))}
           </div>
+          <OBSPoolMobileMatchList pools={tournamentPools} matches={poolMatches} />
         </div>
       )}
     </OBSFrame>
@@ -85,7 +86,7 @@ export function OBSScoresPage() {
       {tournamentMatches.length === 0 ? (
         <OBSNotice title="No matches yet" message="Generate pool or main draw matches to show live scoring." />
       ) : (
-        <div className="grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden lg:grid-cols-[0.85fr_1.15fr] lg:grid-rows-none lg:gap-4">
+        <div className="grid h-full grid-rows-[auto_auto_1fr] gap-2 overflow-hidden sm:gap-3 lg:grid-cols-[0.85fr_1.15fr] lg:grid-rows-none lg:gap-4">
           <section className="min-w-0 rounded-2xl border border-mpl-border bg-mpl-card p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
               <div>
@@ -106,7 +107,7 @@ export function OBSScoresPage() {
             {featuredMatch && <OBSScoreboardMatch match={featuredMatch} allMatches={tournamentMatches} large />}
           </section>
 
-          <section className="grid min-w-0 grid-rows-2 gap-3 overflow-hidden lg:gap-4">
+          <section className="grid min-w-0 grid-rows-2 gap-2 overflow-hidden sm:gap-3 lg:gap-4">
             <OBSScoreList title="Recent Results" matches={recentMatches} allMatches={tournamentMatches} empty="No completed matches yet" scroll />
             <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} allMatches={tournamentMatches} empty="No upcoming matches" scroll />
           </section>
@@ -129,18 +130,18 @@ function OBSFrame({
     <div className="obs-theme relative flex h-screen w-screen flex-col overflow-hidden bg-[#020705] text-white">
       <div className="obs-halftone-bg pointer-events-none absolute inset-0" />
       <header className="relative z-10 flex items-center gap-2 border-b border-mpl-gold/25 bg-black/90 px-3 py-2 sm:gap-4 sm:px-8 sm:py-3">
-        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold sm:h-12 sm:w-12">
-          <Trophy size={24} />
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-mpl-black shadow-gold sm:h-12 sm:w-12">
+          <Trophy size={22} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[clamp(1.35rem,8vw,1.875rem)] font-black leading-none tracking-wide sm:text-3xl">{title}</p>
-          <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-mpl-gold sm:text-xs sm:tracking-[0.36em]">{subtitle}</p>
+          <p className="truncate text-[clamp(1.55rem,7vw,1.9rem)] font-black leading-none tracking-wide sm:text-3xl">{title}</p>
+          <p className="mt-1 truncate text-[9px] font-black uppercase tracking-[0.26em] text-mpl-gold sm:text-xs sm:tracking-[0.36em]">{subtitle}</p>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-green-500/35 bg-green-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-green-300 sm:gap-2 sm:px-5 sm:text-xs sm:tracking-[0.26em]">
+        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-green-500/35 bg-green-500/10 px-2.5 py-1.5 text-[8px] font-black uppercase tracking-[0.16em] text-green-300 sm:gap-2 sm:px-5 sm:py-2 sm:text-xs sm:tracking-[0.26em]">
           <Radio size={14} /> OBS Live
         </div>
       </header>
-      <main className="relative z-10 min-h-0 flex-1 p-2.5 sm:p-5">{children}</main>
+      <main className="relative z-10 min-h-0 flex-1 p-2 sm:p-5">{children}</main>
     </div>
   );
 }
@@ -202,7 +203,9 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
   const columnWidth = 100 / roundCount;
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-mpl-gold/20 bg-black/45 px-5 pb-4 pt-12 shadow-2xl">
+    <>
+    <OBSMobileBracket rounds={rounds} matches={matches} />
+    <div className="relative hidden h-full w-full overflow-hidden rounded-2xl border border-mpl-gold/20 bg-black/45 px-5 pb-4 pt-12 shadow-2xl sm:block">
       <div
         className="absolute inset-x-5 top-3 grid h-8 gap-5"
         style={{ gridTemplateColumns: `repeat(${roundCount}, minmax(0, 1fr))` }}
@@ -276,6 +279,96 @@ function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: Schedul
         })}
       </div>
     </div>
+    </>
+  );
+}
+
+function OBSMobileBracket({ rounds, matches }: { rounds: number[]; matches: ScheduledMatch[] }) {
+  const focusRound = getMobileFocusRound(rounds, matches);
+  const focusMatches = matches
+    .filter(match => match.round === focusRound)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  const completedCount = focusMatches.filter(match => match.status === 'completed').length;
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-mpl-gold/25 bg-black/50 p-2 shadow-2xl sm:hidden">
+      <div className="mb-2 grid grid-cols-5 gap-1">
+        {rounds.map(round => {
+          const roundMatches = matches.filter(match => match.round === round);
+          const isActive = round === focusRound;
+          return (
+            <div
+              key={round}
+              className={cn(
+                'min-w-0 rounded-lg border px-1.5 py-1',
+                isActive ? 'border-mpl-gold bg-mpl-gold/15 shadow-gold-sm' : 'border-mpl-border bg-black/45'
+              )}
+            >
+              <p className={cn('truncate text-[15px] font-black leading-none', isActive ? 'text-mpl-gold' : 'text-white')}>
+                {roundLabel(roundMatches.length)}
+              </p>
+              <p className="mt-0.5 text-[7px] font-black uppercase tracking-[0.16em] text-mpl-gray">{roundMatches.length} matches</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-1.5">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.24em] text-mpl-gray">Round focus</p>
+          <p className="text-lg font-black leading-none text-mpl-gold">{roundLabel(focusMatches.length)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-mpl-gray">Completed</p>
+          <p className="text-sm font-black text-white">{completedCount}/{focusMatches.length}</p>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="grid h-full content-start gap-1.5 overflow-hidden">
+          {focusMatches.slice(0, 8).map(match => (
+            <OBSMobileMatchCard key={match.id} match={match} allMatches={matches} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OBSMobileMatchCard({ match, allMatches }: { match: ScheduledMatch; allMatches: ScheduledMatch[] }) {
+  const nextMatch = findNextMatch(match, allMatches);
+  return (
+    <div className="rounded-xl border border-mpl-border bg-mpl-card/90 px-2 py-1.5">
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-mpl-gray">M{match.matchNumber}</p>
+        <p className={cn('rounded-full border px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.16em]', match.status === 'completed' ? 'border-green-400/40 text-green-300' : match.status === 'ongoing' ? 'border-red-400/40 text-red-300' : 'border-mpl-gold/30 text-mpl-gold')}>
+          {match.status}
+        </p>
+      </div>
+      <OBSMobileTeamRow winner={match.winnerId === match.team1?.id} label={getDrawTeamLabel(match, 'team1', allMatches)} score={formatSets(match.sets, 'team1')} />
+      <OBSMobileTeamRow winner={match.winnerId === match.team2?.id} label={getDrawTeamLabel(match, 'team2', allMatches)} score={formatSets(match.sets, 'team2')} />
+      {nextMatch && (
+        <p className="mt-1 truncate text-[8px] font-bold uppercase tracking-[0.12em] text-mpl-gray">
+          Winner advances to M{nextMatch.matchNumber}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OBSMobileTeamRow({ winner, label, score }: { winner: boolean; label: string; score?: string }) {
+  return (
+    <div className={cn(
+      'mt-1 grid grid-cols-[1fr_42px] items-center gap-2 rounded-lg border px-2 py-1.5',
+      winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border bg-black/35'
+    )}>
+      <span className={cn('min-w-0 truncate text-[12px] font-black uppercase leading-tight', winner ? 'text-mpl-gold' : 'text-white')}>
+        {label}
+      </span>
+      <span className={cn('text-right text-[11px] font-black', winner ? 'text-mpl-gold' : 'text-mpl-gray')}>
+        {score ?? '-'}
+      </span>
+    </div>
   );
 }
 
@@ -342,6 +435,53 @@ function OBSPoolGroupsRail({ pools }: { pools: Pool[] }) {
           </div>
         );
       })}
+    </section>
+  );
+}
+
+function OBSPoolMobileMatchList({ pools, matches }: { pools: Pool[]; matches: ScheduledMatch[] }) {
+  const sortedMatches = matches
+    .slice()
+    .sort((a, b) => {
+      const poolA = pools.find(pool => pool.id === a.poolId)?.letter ?? '';
+      const poolB = pools.find(pool => pool.id === b.poolId)?.letter ?? '';
+      return poolA.localeCompare(poolB) || a.matchNumber - b.matchNumber;
+    });
+  const visibleMatches = sortedMatches
+    .filter(match => match.status === 'ongoing')
+    .concat(sortedMatches.filter(match => match.status !== 'ongoing'))
+    .slice(0, 6);
+
+  return (
+    <section className="min-h-0 overflow-hidden rounded-2xl border border-mpl-gold/25 bg-mpl-card/90 p-2 sm:hidden">
+      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-1.5">
+        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-mpl-gold">Pool Matches</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-mpl-gray">{matches.length} total</p>
+      </div>
+      <div className="grid gap-1.5 overflow-hidden">
+        {visibleMatches.length === 0 && (
+          <p className="py-6 text-center text-[11px] font-black uppercase tracking-[0.18em] text-mpl-gray">
+            No pool matches yet
+          </p>
+        )}
+        {visibleMatches.map(match => {
+          const pool = pools.find(item => item.id === match.poolId);
+          return (
+            <div key={match.id} className="rounded-xl border border-mpl-border bg-black/35 px-2 py-1.5">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-mpl-gray">
+                  Group {pool?.letter ?? '-'} - M{match.matchNumber}
+                </p>
+                <p className={cn('text-[8px] font-black uppercase tracking-[0.16em]', match.status === 'completed' ? 'text-green-300' : match.status === 'ongoing' ? 'text-red-300' : 'text-mpl-gold')}>
+                  {match.status}
+                </p>
+              </div>
+              <OBSScoreMiniLine label={getScoreTeamLabel(match, 'team1', matches)} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
+              <OBSScoreMiniLine label={getScoreTeamLabel(match, 'team2', matches)} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -529,7 +669,7 @@ function OBSScoreTeam({
   return (
     <div className={cn(
       'grid items-center gap-2 rounded-xl border bg-black/35 sm:gap-3',
-      large ? 'grid-cols-[46px_1fr_repeat(3,42px)] px-3 py-3 sm:grid-cols-[56px_1fr_repeat(3,64px)] sm:px-4 sm:py-4' : 'grid-cols-[34px_1fr_repeat(3,34px)] px-2 py-2',
+      large ? 'grid-cols-[46px_minmax(0,1fr)_36px_36px_36px] px-3 py-3 sm:grid-cols-[56px_1fr_repeat(3,64px)] sm:px-4 sm:py-4' : 'grid-cols-[34px_1fr_repeat(3,34px)] px-2 py-2',
       winner ? 'border-mpl-gold bg-mpl-gold/15' : 'border-mpl-border'
     )}>
       <div className={cn(
@@ -540,7 +680,7 @@ function OBSScoreTeam({
         {team?.seed ? `#${team.seed}` : winner ? <Trophy size={large ? 23 : 15} /> : '-'}
       </div>
       <div className="min-w-0">
-        <p className={cn('truncate font-black leading-tight', large ? 'text-[clamp(1rem,4.5vw,1.875rem)] sm:text-3xl' : 'text-sm', winner ? 'text-mpl-gold' : 'text-white')}>
+        <p className={cn('max-h-9 overflow-hidden font-black uppercase leading-tight sm:truncate sm:normal-case', large ? 'text-[14px] sm:text-3xl' : 'text-sm', winner ? 'text-mpl-gold' : 'text-white')}>
           {getScoreTeamLabel(match, side, allMatches)}
         </p>
         <p className={cn('truncate font-bold uppercase tracking-[0.16em] text-mpl-gray', large ? 'text-[10px] sm:text-xs' : 'text-[8px]')}>{team?.clubName ?? 'Awaiting team'}</p>
@@ -569,6 +709,8 @@ function OBSScoreTeam({
 function OBSScoreList({ title, matches, allMatches, empty, scroll = false }: { title: string; matches: ScheduledMatch[]; allMatches: ScheduledMatch[]; empty: string; scroll?: boolean }) {
   const shouldScroll = scroll && matches.length > 4;
   const duration = Math.max(24, matches.length * 4.5);
+  const mobileLimit = title.toLowerCase().includes('recent') ? 3 : 2;
+  const mobileMatches = matches.slice(0, mobileLimit);
   const items = (
     <>
       {matches.length === 0 && <p className="text-sm font-semibold text-mpl-gray">{empty}</p>}
@@ -579,30 +721,38 @@ function OBSScoreList({ title, matches, allMatches, empty, scroll = false }: { t
   );
 
   return (
-    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3 sm:p-4">
-      <div className="mb-3 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-mpl-gold sm:text-[13px] sm:tracking-[0.26em]">{title}</p>
+    <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-2.5 sm:p-4">
+      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-1.5 sm:mb-3 sm:pb-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-mpl-gold sm:text-[13px] sm:tracking-[0.26em]">{title}</p>
         <span className="rounded-full border border-mpl-border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-mpl-gray">{matches.length}</span>
       </div>
-      {shouldScroll ? (
-        <div className="obs-scroll-panel">
-          <div className="obs-scroll-track space-y-2" style={{ animationDuration: `${duration}s` }}>
-            {items}
-            <div className="h-2" />
-            {items}
+      <div className="space-y-1.5 sm:hidden">
+        {matches.length === 0 && <p className="text-[11px] font-semibold text-mpl-gray">{empty}</p>}
+        {mobileMatches.map(match => (
+          <OBSScoreListItem key={match.id} match={match} allMatches={allMatches} compact />
+        ))}
+      </div>
+      <div className="hidden sm:block">
+        {shouldScroll ? (
+          <div className="obs-scroll-panel">
+            <div className="obs-scroll-track space-y-2" style={{ animationDuration: `${duration}s` }}>
+              {items}
+              <div className="h-2" />
+              {items}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-2">{items}</div>
-      )}
+        ) : (
+          <div className="space-y-2">{items}</div>
+        )}
+      </div>
     </div>
   );
 }
 
-function OBSScoreListItem({ match, allMatches }: { match: ScheduledMatch; allMatches: ScheduledMatch[] }) {
+function OBSScoreListItem({ match, allMatches, compact = false }: { match: ScheduledMatch; allMatches: ScheduledMatch[]; compact?: boolean }) {
   return (
-    <div className="rounded-xl border border-mpl-border bg-black/40 px-2.5 py-2 shadow-xl sm:px-3">
-      <div className="mb-1.5 flex justify-between text-[9px] font-black uppercase tracking-[0.22em] text-mpl-gray">
+    <div className={cn('rounded-xl border border-mpl-border bg-black/40 shadow-xl', compact ? 'px-2 py-1.5' : 'px-2.5 py-2 sm:px-3')}>
+      <div className={cn('mb-1 flex justify-between font-black uppercase text-mpl-gray', compact ? 'text-[7px] tracking-[0.16em]' : 'text-[9px] tracking-[0.22em]')}>
         <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
         <span className={cn(match.status === 'completed' ? 'text-green-300' : 'text-mpl-gold')}>{match.status}</span>
       </div>
@@ -663,6 +813,35 @@ function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatc
     .filter(candidate => candidate.drawId === match.drawId && candidate.round === previousRound)
     .sort((a, b) => a.matchNumber - b.matchNumber);
   return previousRoundMatches[(currentIndex * 2) + (side === 'team1' ? 0 : 1)];
+}
+
+function findNextMatch(match: ScheduledMatch, allMatches: ScheduledMatch[]): ScheduledMatch | undefined {
+  const nextRound = Math.min(
+    Number.POSITIVE_INFINITY,
+    ...allMatches
+      .filter(candidate => candidate.drawId === match.drawId && candidate.round > match.round)
+      .map(candidate => candidate.round)
+  );
+  if (!Number.isFinite(nextRound)) return undefined;
+
+  const currentRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === match.round)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  const currentIndex = currentRoundMatches.findIndex(candidate => candidate.id === match.id);
+  if (currentIndex < 0) return undefined;
+
+  const nextRoundMatches = allMatches
+    .filter(candidate => candidate.drawId === match.drawId && candidate.round === nextRound)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
+  return nextRoundMatches[Math.floor(currentIndex / 2)];
+}
+
+function getMobileFocusRound(rounds: number[], matches: ScheduledMatch[]): number {
+  const ongoingRound = rounds.find(round => matches.some(match => match.round === round && match.status === 'ongoing'));
+  if (ongoingRound) return ongoingRound;
+  const scheduledRound = rounds.find(round => matches.some(match => match.round === round && match.status !== 'completed'));
+  if (scheduledRound) return scheduledRound;
+  return rounds[rounds.length - 1] ?? 1;
 }
 
 function bracketCenterPercent(matchIndex: number, roundIndex: number, firstRoundCount: number): number {
