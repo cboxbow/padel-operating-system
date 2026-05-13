@@ -65,8 +65,8 @@ export function OBSScoresPage() {
     tournamentMatches.find(match => match.status === 'scheduled' && match.team1 && match.team2) ??
     tournamentMatches.find(match => match.status === 'completed') ??
     tournamentMatches[0];
-  const recentMatches = tournamentMatches.filter(match => match.status === 'completed').slice(0, 8);
-  const upcomingMatches = tournamentMatches.filter(match => match.status !== 'completed').slice(0, 8);
+  const recentMatches = tournamentMatches.filter(match => match.status === 'completed');
+  const upcomingMatches = tournamentMatches.filter(match => match.status !== 'completed');
 
   return (
     <OBSFrame
@@ -98,8 +98,8 @@ export function OBSScoresPage() {
           </section>
 
           <section className="grid min-w-0 grid-rows-2 gap-3 overflow-hidden">
-            <OBSScoreList title="Recent Results" matches={recentMatches} empty="No completed matches yet" />
-            <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} empty="No upcoming matches" />
+            <OBSScoreList title="Recent Results" matches={recentMatches} empty="No completed matches yet" scroll />
+            <OBSScoreList title="Upcoming / Live" matches={upcomingMatches} empty="No upcoming matches" scroll />
           </section>
         </div>
       )}
@@ -380,23 +380,48 @@ function OBSScoreTeam({
   );
 }
 
-function OBSScoreList({ title, matches, empty }: { title: string; matches: ScheduledMatch[]; empty: string }) {
+function OBSScoreList({ title, matches, empty, scroll = false }: { title: string; matches: ScheduledMatch[]; empty: string; scroll?: boolean }) {
+  const shouldScroll = scroll && matches.length > 4;
+  const duration = Math.max(18, matches.length * 3.2);
+  const items = (
+    <>
+      {matches.length === 0 && <p className="text-sm font-semibold text-mpl-gray">{empty}</p>}
+      {matches.map(match => (
+        <OBSScoreListItem key={match.id} match={match} />
+      ))}
+    </>
+  );
+
   return (
     <div className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3">
-      <p className="mb-2 border-b border-mpl-gold/25 pb-1.5 text-[11px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
-      <div className="space-y-1.5">
-        {matches.length === 0 && <p className="text-sm font-semibold text-mpl-gray">{empty}</p>}
-        {matches.map(match => (
-          <div key={match.id} className="rounded-lg border border-mpl-border bg-black/35 px-2 py-1.5">
-            <div className="mb-1 flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">
-              <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
-              <span>{match.status}</span>
-            </div>
-            <OBSScoreMiniLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
-            <OBSScoreMiniLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
-          </div>
-        ))}
+      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-1.5">
+        <p className="text-[11px] font-black uppercase tracking-[0.26em] text-mpl-gold">{title}</p>
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-mpl-gray">{matches.length}</span>
       </div>
+      {shouldScroll ? (
+        <div className="obs-scroll-panel">
+          <div className="obs-scroll-track space-y-1.5" style={{ animationDuration: `${duration}s` }}>
+            {items}
+            <div className="h-2" />
+            {items}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">{items}</div>
+      )}
+    </div>
+  );
+}
+
+function OBSScoreListItem({ match }: { match: ScheduledMatch }) {
+  return (
+    <div className="rounded-lg border border-mpl-border bg-black/35 px-2 py-1.5">
+      <div className="mb-1 flex justify-between text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">
+        <span>{match.poolId ? 'Pool' : 'Draw'} M{match.matchNumber}</span>
+        <span>{match.status}</span>
+      </div>
+      <OBSScoreMiniLine team={match.team1} winner={match.winnerId === match.team1?.id} score={formatSets(match.sets, 'team1')} />
+      <OBSScoreMiniLine team={match.team2} winner={match.winnerId === match.team2?.id} score={formatSets(match.sets, 'team2')} />
     </div>
   );
 }

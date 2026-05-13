@@ -131,4 +131,28 @@
   .nav-item-inactive {
     @apply nav-item text-mpl-gray hover:text-mpl-off-white;
   }
+
+  .obs-scroll-panel {
+    position: relative;
+    height: calc(100% - 30px);
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 88%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 88%, transparent 100%);
+  }
+
+  .obs-scroll-track {
+    animation-name: obs-scroll-up;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    will-change: transform;
+  }
+}
+
+@keyframes obs-scroll-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
 }
