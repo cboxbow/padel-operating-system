@@ -6,11 +6,11 @@ import { BackButton, Modal, GoldDivider } from '../components/UI';
 
 import { MOCK_COURTS } from '../mockData';
 import { cn } from '../lib';
-import type { ScheduledMatch, Court } from '../types';
+import type { Pool, ScheduledMatch, Court } from '../types';
 
 export function MatchSchedulePage() {
   const { navigate, selectedTournament } = useAppState();
-  const { matches, matchesError, scheduleMatch } = useTournamentData();
+  const { matches, matchesError, pools, scheduleMatch } = useTournamentData();
   const { addToast } = useToast();
 
   const [courts] = useState<Court[]>(MOCK_COURTS);
@@ -19,6 +19,11 @@ export function MatchSchedulePage() {
   const [editCourt, setEditCourt] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const tournamentMatches = matches.filter(m => m.tournamentId === selectedTournament?.id);
+  const poolById = new Map(
+    pools
+      .filter(pool => pool.tournamentId === selectedTournament?.id)
+      .map(pool => [pool.id, pool])
+  );
 
   const openEdit = (m: ScheduledMatch) => {
     setEditTarget(m);
@@ -134,7 +139,7 @@ export function MatchSchedulePage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-[8px] text-mpl-gray font-mono font-bold uppercase">
-                            {m.poolId ? `Pool ${m.poolId.slice(-1).toUpperCase()}` : 'Main Draw'} · M{m.matchNumber}
+                            {m.poolId ? getPoolLabel(m.poolId, poolById) : 'Main Draw'} · M{m.matchNumber}
                           </span>
                           {m.courtName && (
                             <span className="text-[9px] text-mpl-gold border border-mpl-gold/30 px-1.5 py-0.5 rounded">
@@ -231,6 +236,13 @@ function getScheduleTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', al
   if (match.poolId) return 'Awaiting team';
   const sourceMatch = findSourceMatch(match, side, allMatches);
   return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
+}
+
+function getPoolLabel(poolId: string, poolById: Map<string, Pool>): string {
+  const pool = poolById.get(poolId);
+  if (pool?.name) return pool.name;
+  if (pool?.letter) return `Pool ${pool.letter}`;
+  return 'Pool';
 }
 
 function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {

@@ -7,14 +7,14 @@ import { TopBar } from '../components/Navigation';
 import { BackButton, OverrideNoteDialog, GoldDivider, ConfirmDialog } from '../components/UI';
 
 import { cn } from '../lib';
-import type { ScheduledMatch, MatchSet } from '../types';
+import type { Pool, ScheduledMatch, MatchSet } from '../types';
 import { openOBSWindow } from '../obs';
 
 type ScoreEntry = { t1: string; t2: string };
 
 export function MatchScorePage() {
   const { navigate, selectedTournament } = useAppState();
-  const { matches, matchesError, completeMatchScore } = useTournamentData();
+  const { matches, matchesError, pools: tournamentPoolsData, completeMatchScore } = useTournamentData();
   const { addToast } = useToast();
 
   const [selectedMatch, setSelectedMatch] = useState<ScheduledMatch | null>(null);
@@ -25,7 +25,13 @@ export function MatchScorePage() {
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   const tournamentMatches = matches.filter(m => m.tournamentId === selectedTournament?.id);
-  const poolIds = [...new Set(tournamentMatches.map(m => m.poolId).filter(Boolean) as string[])];
+  const poolById = new Map(
+    tournamentPoolsData
+      .filter(pool => pool.tournamentId === selectedTournament?.id)
+      .map(pool => [pool.id, pool])
+  );
+  const poolIds = [...new Set(tournamentMatches.map(m => m.poolId).filter(Boolean) as string[])]
+    .sort((a, b) => getPoolLabel(a, poolById).localeCompare(getPoolLabel(b, poolById)));
   const pools = ['all', ...poolIds];
   const filtered = matches.filter(m =>
     m.tournamentId === selectedTournament?.id && (filterPool === 'all' ? true : m.poolId === filterPool)
@@ -146,7 +152,7 @@ export function MatchScorePage() {
                   className={cn('px-4 py-1.5 rounded-full text-xs font-bold border transition-all flex-shrink-0',
                     filterPool === p ? 'bg-mpl-gold text-mpl-black border-mpl-gold' : 'border-mpl-border text-mpl-gray hover:border-mpl-gold/40'
                   )}>
-                  {p === 'all' ? 'All Matches' : `Pool ${p.slice(-1).toUpperCase()}`}
+                  {p === 'all' ? 'All Matches' : getPoolLabel(p, poolById)}
                 </button>
               ))}
             </div>
@@ -159,7 +165,7 @@ export function MatchScorePage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-[8px] text-mpl-gray font-mono font-bold uppercase">
-                        {m.poolId ? `Pool ${m.poolId.slice(-1).toUpperCase()}` : 'Main Draw'} · M{m.matchNumber}
+                        {m.poolId ? getPoolLabel(m.poolId, poolById) : 'Main Draw'} · M{m.matchNumber}
                       </span>
                       {m.courtName && <span className="text-[10px] text-mpl-gold border border-mpl-gold/30 px-1.5 py-0.5 rounded">{m.courtName}</span>}
                     </div>
@@ -317,6 +323,13 @@ function getScoreTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMa
   if (match.poolId) return 'Awaiting team';
   const sourceMatch = findSourceMatch(match, side, allMatches);
   return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
+}
+
+function getPoolLabel(poolId: string, poolById: Map<string, Pool>): string {
+  const pool = poolById.get(poolId);
+  if (pool?.name) return pool.name;
+  if (pool?.letter) return `Pool ${pool.letter}`;
+  return 'Pool';
 }
 
 function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {
