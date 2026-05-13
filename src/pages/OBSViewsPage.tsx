@@ -41,14 +41,17 @@ export function OBSPoolsPage() {
       {tournamentPools.length === 0 ? (
         <OBSNotice title="Pools not generated yet" message="Generate or publish pools to show the OBS pool view." />
       ) : (
-        <div className="flex h-full flex-col gap-3 overflow-hidden">
-          {tournamentPools.map(pool => (
-            <OBSPoolCard
-              key={pool.id}
-              pool={pool}
-              matches={poolMatches.filter(match => match.poolId === pool.id)}
-            />
-          ))}
+        <div className="grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden">
+          <OBSPoolGroupsRail pools={tournamentPools} />
+          <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
+            {tournamentPools.map(pool => (
+              <OBSPoolCard
+                key={pool.id}
+                pool={pool}
+                matches={poolMatches.filter(match => match.poolId === pool.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </OBSFrame>
@@ -266,6 +269,38 @@ function OBSPoolCard({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] 
   );
 }
 
+function OBSPoolGroupsRail({ pools }: { pools: Pool[] }) {
+  return (
+    <section className="grid min-h-0 grid-cols-4 gap-3 overflow-hidden">
+      {pools.map(pool => {
+        const teams = pool.slots
+          .filter(slot => slot.team)
+          .sort((a, b) => a.position - b.position);
+        return (
+          <div key={pool.id} className="min-w-0 rounded-xl border border-mpl-gold/25 bg-black/75 p-2.5 shadow-xl">
+            <div className="mb-1.5 flex items-center justify-between border-b border-mpl-gold/25 pb-1">
+              <p className="text-[13px] font-black uppercase leading-none text-mpl-gold">Group {pool.letter}</p>
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] text-mpl-gray">{teams.length} teams</p>
+            </div>
+            <div className="grid gap-y-0.5">
+              {teams.map(slot => (
+                <div key={slot.id} className="grid min-w-0 grid-cols-[18px_1fr] items-center gap-1">
+                  <span className="flex h-4 w-4 items-center justify-center rounded bg-mpl-gold text-[8px] font-black text-black">
+                    {slot.position}
+                  </span>
+                  <span className="min-w-0 text-[9px] font-black uppercase leading-tight text-white">
+                    {slot.team?.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: ScheduledMatch[]; variant: 'obs' | 'admin' }) {
   const teams = pool.slots
     .filter(slot => slot.team)
@@ -345,10 +380,10 @@ function PoolMatrixCell({
     <div
       title={title}
       className={cn(
-        'min-w-0 truncate border-b border-r border-black/80 px-1.5 py-1 leading-tight',
-        variant === 'obs' ? 'h-[26px]' : 'h-[30px]',
+        'min-w-0 border-b border-r border-black/80 px-1.5 py-1 leading-tight',
+        variant === 'obs' ? 'flex min-h-[22px] items-center justify-center whitespace-normal break-words text-[clamp(8px,0.56vw,11px)]' : 'h-[30px] truncate text-[11px]',
         diagonal ? 'bg-[#626262] text-[#626262]' : variant === 'obs' ? 'bg-white text-black' : 'bg-mpl-black text-white',
-        header ? 'text-left font-semibold' : 'text-center font-medium'
+        header ? 'justify-start text-left font-semibold' : 'text-center font-medium'
       )}
     >
       {children}
@@ -370,7 +405,8 @@ function teamPairKey(teamAId: string, teamBId: string): string {
 }
 
 function formatMatrixTeamName(name: string, variant: 'obs' | 'admin'): string {
-  const limit = variant === 'obs' ? 22 : 28;
+  if (variant === 'obs') return name;
+  const limit = 28;
   return name.length > limit ? `${name.slice(0, limit - 3)}...` : name;
 }
 
