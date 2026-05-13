@@ -6,7 +6,7 @@ import { useAppState, useTournamentData, useToast } from '../context';
 import { TopBar } from '../components/Navigation';
 import { BackButton, ConfirmDialog, GoldDivider } from '../components/UI';
 import { cn } from '../lib';
-import type { PoolSlot, Team } from '../types';
+import type { Pool, PoolSlot, ScheduledMatch, Team } from '../types';
 import { openOBSWindow } from '../obs';
 
 // ─── Draw Room (entry) ────────────────────────────────────────────────────────
@@ -114,6 +114,146 @@ export function DrawRoomPage() {
       </div>
     </div>
   );
+}
+
+function PoolMatrixTable({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] }) {
+  const teams = pool.slots
+    .filter(slot => slot.team)
+    .sort((a, b) => a.position - b.position)
+    .map(slot => slot.team!);
+  const codeByPair = buildPoolMatchCodeMap(pool, matches);
+  const standings = calculatePoolStandings(pool, matches);
+  const rankByTeamId = new Map(standings.map((row, index) => [row.team.id, index + 1]));
+  const columns = `minmax(132px, 1fr) repeat(${Math.max(1, teams.length)}, minmax(132px, 1fr)) minmax(62px, 0.45fr)`;
+
+  if (teams.length === 0) {
+    return (
+      <div className="rounded-xl border border-mpl-border bg-mpl-dark p-4 text-center text-sm font-semibold text-mpl-gray">
+        No teams assigned to {pool.name}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[720px] overflow-hidden rounded-xl border border-mpl-border bg-mpl-dark">
+      <div className="border-b border-mpl-border bg-mpl-border px-3 py-2 text-center text-xs font-black uppercase tracking-[0.2em] text-white">
+        Group {pool.letter}
+      </div>
+      <div className="grid border-l border-t border-mpl-border text-[11px]" style={{ gridTemplateColumns: columns }}>
+        <PoolMatrixCell header>Teams</PoolMatrixCell>
+        {teams.map(team => (
+          <PoolMatrixCell key={team.id} header title={team.name}>
+            {formatMatrixTeamName(team.name)}
+          </PoolMatrixCell>
+        ))}
+        <PoolMatrixCell header>Rank</PoolMatrixCell>
+
+        {teams.map((rowTeam, rowIndex) => (
+          <div key={rowTeam.id} className="contents">
+            <PoolMatrixCell header title={rowTeam.name}>
+              {formatMatrixTeamName(rowTeam.name)}
+            </PoolMatrixCell>
+            {teams.map((columnTeam, columnIndex) => {
+              const isDiagonal = rowIndex === columnIndex;
+              const code = isDiagonal ? '' : codeByPair.get(teamPairKey(rowTeam.id, columnTeam.id));
+              return (
+                <PoolMatrixCell key={`${rowTeam.id}-${columnTeam.id}`} diagonal={isDiagonal}>
+                  {code ?? '-'}
+                </PoolMatrixCell>
+              );
+            })}
+            <PoolMatrixCell>{rankByTeamId.get(rowTeam.id) ? `#${rankByTeamId.get(rowTeam.id)}` : '-'}</PoolMatrixCell>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PoolMatrixCell({
+  children,
+  diagonal = false,
+  header = false,
+  title,
+}: {
+  children: string;
+  diagonal?: boolean;
+  header?: boolean;
+  title?: string;
+}) {
+  return (
+    <div
+      title={title}
+      className={cn(
+        'h-8 min-w-0 truncate border-b border-r border-mpl-border px-2 py-1.5 leading-tight',
+        diagonal ? 'bg-mpl-border text-mpl-border' : 'bg-mpl-black text-white',
+        header ? 'text-left font-bold' : 'text-center font-semibold text-mpl-gold'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function buildPoolMatchCodeMap(pool: Pool, matches: ScheduledMatch[]): Map<string, string> {
+  return new Map(
+    matches
+      .filter(match => match.poolId === pool.id && match.team1 && match.team2)
+      .sort((a, b) => a.matchNumber - b.matchNumber)
+      .map((match, index) => [teamPairKey(match.team1!.id, match.team2!.id), `${pool.letter}${index + 1}`])
+  );
+}
+
+function teamPairKey(teamAId: string, teamBId: string): string {
+  return [teamAId, teamBId].sort().join(':');
+}
+
+function formatMatrixTeamName(name: string): string {
+  return name.length > 28 ? `${name.slice(0, 25)}...` : name;
+}
+
+function calculatePoolStandings(pool: Pool, matches: ScheduledMatch[]) {
+  const rows = pool.slots
+    .filter(slot => slot.team)
+    .map(slot => ({
+      team: slot.team!,
+      wins: 0,
+      losses: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      initialPosition: slot.position,
+    }));
+  const byTeamId = new Map(rows.map(row => [row.team.id, row]));
+
+  matches.filter(match => match.status === 'completed').forEach(match => {
+    if (!match.team1 || !match.team2) return;
+    const row1 = byTeamId.get(match.team1.id);
+    const row2 = byTeamId.get(match.team2.id);
+    if (!row1 || !row2) return;
+
+    match.sets.forEach(set => {
+      row1.gamesWon += set.team1Score;
+      row1.gamesLost += set.team2Score;
+      row2.gamesWon += set.team2Score;
+      row2.gamesLost += set.team1Score;
+    });
+
+    if (match.winnerId === match.team1.id) {
+      row1.wins += 1;
+      row2.losses += 1;
+    } else if (match.winnerId === match.team2.id) {
+      row2.wins += 1;
+      row1.losses += 1;
+    }
+  });
+
+  return rows.sort((a, b) => {
+    const winDiff = b.wins - a.wins;
+    if (winDiff !== 0) return winDiff;
+    const gameDiff = (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost);
+    if (gameDiff !== 0) return gameDiff;
+    return a.initialPosition - b.initialPosition;
+  });
 }
 
 // ─── Pool Draw Page ───────────────────────────────────────────────────────────
@@ -486,6 +626,19 @@ export function PoolDrawPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <p className="section-title">Round Robin Matrix</p>
+                <div className="overflow-x-auto rounded-xl">
+                  <PoolMatrixTable
+                    pool={pool}
+                    matches={tournamentPoolMatches.filter(match => match.poolId === pool.id)}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-mpl-gray">
+                  Codes are generated from pool matches. Publish all pools, then generate pool matches to fill A1, A2, etc.
+                </p>
               </div>
 
               {/* Actions */}

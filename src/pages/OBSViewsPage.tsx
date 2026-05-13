@@ -1,4 +1,4 @@
-import { Trophy, Radio, Users, Swords, TrendingUp } from 'lucide-react';
+import { Trophy, Radio } from 'lucide-react';
 import { useAppState, useTournamentData } from '../context';
 import { cn } from '../lib';
 import type { MatchSet, Pool, ScheduledMatch } from '../types';
@@ -41,7 +41,7 @@ export function OBSPoolsPage() {
       {tournamentPools.length === 0 ? (
         <OBSNotice title="Pools not generated yet" message="Generate or publish pools to show the OBS pool view." />
       ) : (
-        <div className="grid h-full grid-cols-2 gap-3 overflow-hidden xl:grid-cols-4">
+        <div className="flex h-full flex-col gap-3 overflow-hidden">
           {tournamentPools.map(pool => (
             <OBSPoolCard
               key={pool.id}
@@ -259,63 +259,119 @@ function OBSFIPTeamLine({ winner, score, label }: { winner: boolean; score?: str
 }
 
 function OBSPoolCard({ pool, matches }: { pool: Pool; matches: ScheduledMatch[] }) {
+  return (
+    <section className="min-h-0 flex-1 overflow-hidden rounded-xl border border-mpl-border bg-[#f6f6f6] text-black shadow-2xl">
+      <PoolMatrixTable pool={pool} matches={matches} variant="obs" />
+    </section>
+  );
+}
+
+function PoolMatrixTable({ pool, matches, variant }: { pool: Pool; matches: ScheduledMatch[]; variant: 'obs' | 'admin' }) {
+  const teams = pool.slots
+    .filter(slot => slot.team)
+    .sort((a, b) => a.position - b.position)
+    .map(slot => slot.team!);
+  const codeByPair = buildPoolMatchCodeMap(pool, matches);
   const standings = calculateStandings(pool, matches);
+  const rankByTeamId = new Map(standings.map((row, index) => [row.team.id, index + 1]));
+  const columns = `minmax(120px, 0.95fr) repeat(${Math.max(1, teams.length)}, minmax(120px, 1fr)) minmax(54px, 0.35fr)`;
+
+  if (teams.length === 0) {
+    return (
+      <div className={cn('flex h-full items-center justify-center p-4 text-center font-black uppercase tracking-[0.2em]', variant === 'obs' ? 'text-black' : 'text-mpl-gray')}>
+        No teams in {pool.name}
+      </div>
+    );
+  }
 
   return (
-    <section className="min-h-0 overflow-hidden rounded-2xl border border-mpl-border bg-mpl-card p-3 shadow-2xl">
-      <div className="mb-2 flex items-center justify-between border-b border-mpl-gold/25 pb-2">
-        <div>
-          <p className="text-xl font-black leading-none text-mpl-gold">{pool.name}</p>
-          <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.22em] text-mpl-gray">{pool.slots.filter(slot => slot.team).length} teams</p>
-        </div>
-        <Users className="text-mpl-gold" size={20} />
+    <div className={cn('h-full min-w-0 overflow-hidden', variant === 'obs' ? 'bg-[#f6f6f6] p-0' : 'rounded-xl border border-mpl-border bg-mpl-dark')}>
+      <div className={cn(
+        'border border-black/80 text-center font-semibold uppercase',
+        variant === 'obs' ? 'bg-[#bdbdbd] px-2 py-1 text-[13px] text-black' : 'bg-mpl-border px-2 py-2 text-xs text-white'
+      )}>
+        Group {pool.letter}
       </div>
+      <div
+        className={cn('grid border-l border-t border-black/80', variant === 'obs' ? 'text-[12px]' : 'min-w-[680px] text-[11px]')}
+        style={{ gridTemplateColumns: columns }}
+      >
+        <PoolMatrixCell variant={variant} header>Teams</PoolMatrixCell>
+        {teams.map(team => (
+          <PoolMatrixCell key={team.id} variant={variant} header title={team.name}>
+            {formatMatrixTeamName(team.name, variant)}
+          </PoolMatrixCell>
+        ))}
+        <PoolMatrixCell variant={variant} header>Rank</PoolMatrixCell>
 
-      <div className="space-y-1.5">
-        {pool.slots.map(slot => (
-          <div key={slot.id} className="flex items-center gap-2 rounded-lg border border-mpl-border bg-black/35 px-2 py-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-mpl-border text-[10px] font-black text-mpl-gray">{slot.position}</div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-black leading-tight text-white">{slot.team?.name ?? 'Empty'}</p>
-              <p className="truncate text-[8px] font-bold uppercase tracking-[0.16em] text-mpl-gray">{slot.team?.clubName ?? 'Awaiting details'}</p>
-            </div>
-            {slot.isSeedProtected && <span className="rounded border border-mpl-gold/40 px-1 py-0.5 text-[7px] font-black text-mpl-gold">SEED</span>}
+        {teams.map((rowTeam, rowIndex) => (
+          <div key={rowTeam.id} className="contents">
+            <PoolMatrixCell key={`${rowTeam.id}-name`} variant={variant} header title={rowTeam.name}>
+              {formatMatrixTeamName(rowTeam.name, variant)}
+            </PoolMatrixCell>
+            {teams.map((columnTeam, columnIndex) => {
+              const isDiagonal = rowIndex === columnIndex;
+              const code = isDiagonal ? '' : codeByPair.get(teamPairKey(rowTeam.id, columnTeam.id));
+              return (
+                <PoolMatrixCell key={`${rowTeam.id}-${columnTeam.id}`} variant={variant} diagonal={isDiagonal}>
+                  {code ?? '-'}
+                </PoolMatrixCell>
+              );
+            })}
+            <PoolMatrixCell key={`${rowTeam.id}-rank`} variant={variant}>
+              {rankByTeamId.get(rowTeam.id) ? `#${rankByTeamId.get(rowTeam.id)}` : '-'}
+            </PoolMatrixCell>
           </div>
         ))}
       </div>
-
-      <div className="mt-3 rounded-xl border border-mpl-border bg-black/30 p-2">
-        <div className="mb-1.5 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-mpl-gold">
-          <TrendingUp size={11} /> Standings
-        </div>
-        <div className="space-y-1">
-          {standings.map((row, index) => (
-            <div key={row.team.id} className="grid grid-cols-[18px_1fr_34px] items-center gap-2 text-[10px]">
-              <span className={cn('font-black', index < 2 ? 'text-mpl-gold' : 'text-mpl-gray')}>{index + 1}</span>
-              <span className="truncate font-bold text-white">{row.team.name}</span>
-              <span className="text-right font-black text-mpl-gray">{row.wins}-{row.losses}</span>
-            </div>
-          ))}
-          {standings.length === 0 && <p className="text-[10px] font-semibold text-mpl-gray">No teams yet</p>}
-        </div>
-      </div>
-
-      {matches.length > 0 && (
-        <div className="mt-3 rounded-xl border border-mpl-border bg-black/30 p-2">
-          <div className="mb-1.5 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-mpl-gold">
-            <Swords size={11} /> Matches
-          </div>
-          <div className="space-y-1">
-            {matches.slice(0, 6).map(match => (
-              <p key={match.id} className="truncate text-[9px] font-bold text-mpl-gray">
-                M{match.matchNumber}: <span className="text-white">{getPoolTeamLabel(match, 'team1')}</span> vs <span className="text-white">{getPoolTeamLabel(match, 'team2')}</span>
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
+    </div>
   );
+}
+
+function PoolMatrixCell({
+  children,
+  diagonal = false,
+  header = false,
+  title,
+  variant,
+}: {
+  children: React.ReactNode;
+  diagonal?: boolean;
+  header?: boolean;
+  title?: string;
+  variant: 'obs' | 'admin';
+}) {
+  return (
+    <div
+      title={title}
+      className={cn(
+        'min-w-0 truncate border-b border-r border-black/80 px-1.5 py-1 leading-tight',
+        variant === 'obs' ? 'h-[26px]' : 'h-[30px]',
+        diagonal ? 'bg-[#626262] text-[#626262]' : variant === 'obs' ? 'bg-white text-black' : 'bg-mpl-black text-white',
+        header ? 'text-left font-semibold' : 'text-center font-medium'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function buildPoolMatchCodeMap(pool: Pool, matches: ScheduledMatch[]): Map<string, string> {
+  return new Map(
+    matches
+      .filter(match => match.poolId === pool.id && match.team1 && match.team2)
+      .sort((a, b) => a.matchNumber - b.matchNumber)
+      .map((match, index) => [teamPairKey(match.team1!.id, match.team2!.id), `${pool.letter}${index + 1}`])
+  );
+}
+
+function teamPairKey(teamAId: string, teamBId: string): string {
+  return [teamAId, teamBId].sort().join(':');
+}
+
+function formatMatrixTeamName(name: string, variant: 'obs' | 'admin'): string {
+  const limit = variant === 'obs' ? 22 : 28;
+  return name.length > limit ? `${name.slice(0, limit - 3)}...` : name;
 }
 
 function OBSScoreboardMatch({ match, allMatches, large = false }: { match: ScheduledMatch; allMatches: ScheduledMatch[]; large?: boolean }) {
@@ -452,12 +508,6 @@ function getDrawTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMat
   if (match.isBye) return 'BYE';
   const sourceMatch = findSourceMatch(match, side, allMatches);
   return sourceMatch ? `Winner M${sourceMatch.matchNumber}` : 'Awaiting opponent';
-}
-
-function getPoolTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2'): string {
-  const team = side === 'team1' ? match.team1 : match.team2;
-  if (team) return team.name;
-  return match.isBye ? 'BYE' : 'Awaiting team';
 }
 
 function getScoreTeamLabel(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): string {
