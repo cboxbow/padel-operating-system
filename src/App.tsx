@@ -51,7 +51,7 @@ function AppContent() {
   };
 
   return (
-    <div className={`flex flex-col h-full w-full bg-mpl-black mx-auto relative overflow-hidden ${isCurrentOBSView ? 'max-w-none' : 'max-w-lg'}`}>
+    <div className={`app-theme flex flex-col h-full w-full mx-auto relative overflow-hidden ${isCurrentOBSView ? 'max-w-none' : 'max-w-lg'}`}>
       <div className="absolute top-0 left-0 right-0 h-px bg-gold-gradient opacity-60 z-50" />
       <div className="flex-1 flex flex-col overflow-hidden">
         {renderView()}
@@ -88,7 +88,7 @@ function AppGate() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-mpl-black flex items-center justify-center">
+      <div className="app-theme min-h-screen relative overflow-hidden flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-mpl-border border-t-mpl-gold animate-spin" />
       </div>
     );
@@ -100,7 +100,7 @@ function AppGate() {
 
   if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
     return (
-      <div className="min-h-screen bg-mpl-black flex items-center justify-center px-5">
+      <div className="app-theme min-h-screen relative overflow-hidden flex items-center justify-center px-5">
         <div className="w-full max-w-sm mpl-card p-5 space-y-4">
           <div>
             <p className="text-white font-black text-sm tracking-wide">Admin access blocked</p>

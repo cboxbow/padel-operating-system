@@ -24,7 +24,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-mpl-black flex items-center justify-center px-5">
+    <div className="app-theme min-h-screen relative overflow-hidden flex items-center justify-center px-5">
       <form onSubmit={handleSubmit} className="w-full max-w-sm mpl-card p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-gold-gradient flex items-center justify-center">

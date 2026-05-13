@@ -35,17 +35,43 @@
     border-radius: 2px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #D4AF37;
+    background: #4ad569;
   }
 }
 
 @layer components {
+  .app-theme {
+    isolation: isolate;
+    background:
+      radial-gradient(circle at 78% 8%, rgba(74, 213, 105, 0.12), transparent 30%),
+      linear-gradient(145deg, #03120d 0%, #020705 58%, #000000 100%);
+  }
+
+  .app-theme::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.26;
+    background-image: url('/obs-dot-design.png');
+    background-repeat: no-repeat;
+    background-size: min(160vw, 640px) auto;
+    background-position: right -220px bottom -90px;
+    filter: drop-shadow(0 0 24px rgba(74, 213, 105, 0.22));
+  }
+
+  .app-theme > * {
+    position: relative;
+    z-index: 1;
+  }
+
   .mpl-card {
-    @apply bg-mpl-card border border-mpl-border rounded-2xl shadow-card;
+    @apply bg-mpl-card/95 border border-mpl-border rounded-2xl shadow-card backdrop-blur-sm;
   }
   
   .mpl-card-gold {
-    @apply bg-mpl-card border border-mpl-gold/30 rounded-2xl shadow-gold;
+    @apply bg-mpl-card/95 border border-mpl-gold/35 rounded-2xl shadow-gold backdrop-blur-sm;
   }
 
   .btn-gold {
@@ -55,7 +81,7 @@
   }
 
   .btn-ghost {
-    @apply border border-mpl-border text-mpl-gray hover:text-white hover:border-mpl-gold/50 
+    @apply border border-mpl-border bg-mpl-dark/50 text-mpl-gray hover:text-white hover:border-mpl-gold/50 hover:bg-mpl-card2/80
            rounded-xl px-4 py-2.5 text-sm transition-all duration-200 active:scale-95;
   }
 
@@ -88,17 +114,17 @@
   }
 
   .input-field {
-    @apply bg-mpl-dark border border-mpl-border rounded-xl px-3 py-2.5 text-sm text-white 
+    @apply bg-mpl-dark/90 border border-mpl-border rounded-xl px-3 py-2.5 text-sm text-white 
            placeholder-mpl-gray focus:outline-none focus:border-mpl-gold/60 focus:ring-1 
            focus:ring-mpl-gold/30 transition-all duration-200 w-full;
   }
 
   .section-title {
-    @apply text-xs font-semibold uppercase tracking-widest text-mpl-gray mb-3;
+    @apply text-xs font-black uppercase tracking-widest text-mpl-gold mb-3;
   }
 
   .pool-slot {
-    @apply bg-mpl-dark border border-mpl-border rounded-xl p-3 flex items-center gap-3 
+    @apply bg-mpl-dark/90 border border-mpl-border rounded-xl p-3 flex items-center gap-3 
            transition-all duration-200 cursor-pointer hover:border-mpl-gold/40 hover:bg-mpl-card2;
   }
 
