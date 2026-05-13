@@ -344,6 +344,55 @@ export async function saveMatchScore(
   await insertScoreAudit(match, sets, isCorrection, profileId, reason);
 }
 
+export async function saveLiveMatchScore(
+  match: ScheduledMatch,
+  sets: MatchSet[],
+): Promise<void> {
+  if (!isUuid(match.id) || match.status === 'completed') {
+    return;
+  }
+
+  const { error: matchError } = await supabase
+    .from('matches')
+    .update({
+      status: 'ongoing',
+      winner_id: null,
+      completed_at: null,
+    })
+    .eq('id', match.id);
+
+  if (matchError) {
+    throw matchError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from('match_sets')
+    .delete()
+    .eq('match_id', match.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (sets.length === 0) {
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .from('match_sets')
+    .insert(sets.map(set => ({
+      match_id: match.id,
+      set_number: set.setNumber,
+      team1_score: set.team1Score,
+      team2_score: set.team2Score,
+      is_tiebreak: set.isTiebreak,
+    })));
+
+  if (insertError) {
+    throw insertError;
+  }
+}
+
 export async function updateMatchSchedule(
   match: ScheduledMatch,
   scheduledAt: string,

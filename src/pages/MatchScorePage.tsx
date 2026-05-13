@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle, Edit3, AlertTriangle, Clock, Trophy, Radio
 } from 'lucide-react';
@@ -9,12 +9,13 @@ import { BackButton, OverrideNoteDialog, GoldDivider, ConfirmDialog } from '../c
 import { cn } from '../lib';
 import type { Pool, ScheduledMatch, MatchSet } from '../types';
 import { openOBSWindow } from '../obs';
+import { clearLiveScoreDraft, publishLiveScoreDraft } from '../liveScoreDraft';
 
 type ScoreEntry = { t1: string; t2: string };
 
 export function MatchScorePage() {
   const { navigate, selectedTournament } = useAppState();
-  const { matches, matchesError, pools: tournamentPoolsData, completeMatchScore } = useTournamentData();
+  const { matches, matchesError, pools: tournamentPoolsData, completeMatchScore, updateLiveMatchScore } = useTournamentData();
   const { addToast } = useToast();
 
   const [selectedMatch, setSelectedMatch] = useState<ScheduledMatch | null>(null);
@@ -39,11 +40,30 @@ export function MatchScorePage() {
 
   const openMatch = (match: ScheduledMatch) => {
     setSelectedMatch(match);
-    if (match.sets.length > 0) {
-      setScores(match.sets.map(s => ({ t1: String(s.team1Score), t2: String(s.team2Score) })));
-    } else {
-      setScores([{ t1: '', t2: '' }]);
-    }
+    const nextScores = match.sets.length > 0
+      ? match.sets.map(s => ({ t1: String(s.team1Score), t2: String(s.team2Score) }))
+      : [{ t1: '', t2: '' }];
+    setScores(nextScores);
+    publishLiveScoreDraft(match, buildSetsFromScores(match.id, nextScores, true));
+  };
+
+  useEffect(() => {
+    if (!selectedMatch) return;
+    publishLiveScoreDraft(selectedMatch, buildSetsFromScores(selectedMatch.id, scores, true));
+  }, [scores, selectedMatch]);
+
+  useEffect(() => {
+    if (!selectedMatch || selectedMatch.status === 'completed') return;
+    const liveSets = buildSetsFromScores(selectedMatch.id, scores, true);
+    const timeout = window.setTimeout(() => {
+      void updateLiveMatchScore(selectedMatch, liveSets);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [scores, selectedMatch, updateLiveMatchScore]);
+
+  const closeMatch = () => {
+    if (selectedMatch) clearLiveScoreDraft(selectedMatch.id);
+    setSelectedMatch(null);
   };
 
   const addSet = () => setScores(prev => [...prev, { t1: '', t2: '' }]);
@@ -54,14 +74,7 @@ export function MatchScorePage() {
   };
 
   const buildSets = (matchId: string): MatchSet[] =>
-    scores.map((s, i) => ({
-      id: `${matchId}-set${i + 1}`,
-      matchId,
-      setNumber: i + 1,
-      team1Score: parseInt(s.t1) || 0,
-      team2Score: parseInt(s.t2) || 0,
-      isTiebreak: i === 2,
-    }));
+    buildSetsFromScores(matchId, scores, false);
 
   const handleSaveScore = () => {
     if (!selectedMatch) return;
@@ -84,11 +97,14 @@ export function MatchScorePage() {
 
   const commitScore = async () => {
     if (!selectedMatch) return;
-    const newSets = buildSets(selectedMatch.id);
+    const matchId = selectedMatch.id;
+    const matchNumber = selectedMatch.matchNumber;
+    const newSets = buildSets(matchId);
     try {
       await completeMatchScore(selectedMatch, newSets);
+      clearLiveScoreDraft(matchId);
       setSelectedMatch(null);
-      addToast({ type: 'success', title: 'Score Saved', message: `Match ${selectedMatch.matchNumber} completed.` });
+      addToast({ type: 'success', title: 'Score Saved', message: `Match ${matchNumber} completed.` });
     } catch (error) {
       addToast({
         type: 'error',
@@ -100,8 +116,10 @@ export function MatchScorePage() {
 
   const commitOverride = async (reason: string) => {
     if (!pendingCorrection || !selectedMatch) return;
+    const matchId = selectedMatch.id;
     try {
       await completeMatchScore(selectedMatch, pendingCorrection.sets, reason);
+      clearLiveScoreDraft(matchId);
       setSelectedMatch(null);
       addToast({ type: 'warning', title: 'Score Corrected', message: 'Override recorded in audit log.' });
       setPendingCorrection(null);
@@ -124,7 +142,7 @@ export function MatchScorePage() {
       <TopBar
         title="Match Scores"
         subtitle={selectedTournament?.name}
-        leftAction={<BackButton onClick={() => selectedMatch ? setSelectedMatch(null) : navigate('tournament_detail', selectedTournament?.id)} label={selectedMatch ? 'Matches' : 'Back'} />}
+        leftAction={<BackButton onClick={() => selectedMatch ? closeMatch() : navigate('tournament_detail', selectedTournament?.id)} label={selectedMatch ? 'Matches' : 'Back'} />}
       />
       <div className="flex-1 overflow-y-auto">
         {!selectedMatch ? (
@@ -287,7 +305,7 @@ export function MatchScorePage() {
 
             <GoldDivider />
             <div className="flex gap-3">
-              <button className="btn-ghost flex-1" onClick={() => setSelectedMatch(null)}>Cancel</button>
+              <button className="btn-ghost flex-1" onClick={closeMatch}>Cancel</button>
               <button className="btn-gold flex-1 flex items-center justify-center gap-2" onClick={handleSaveScore}>
                 {selectedMatch.status === 'completed' ? <><AlertTriangle size={13} /> Correct Score</> : <><CheckCircle size={13} /> Save Score</>}
               </button>
@@ -330,6 +348,19 @@ function getPoolLabel(poolId: string, poolById: Map<string, Pool>): string {
   if (pool?.name) return pool.name;
   if (pool?.letter) return `Pool ${pool.letter}`;
   return 'Pool';
+}
+
+function buildSetsFromScores(matchId: string, scores: ScoreEntry[], keepIncomplete: boolean): MatchSet[] {
+  return scores
+    .filter(score => keepIncomplete || (score.t1 !== '' && score.t2 !== ''))
+    .map((score, index) => ({
+      id: `${matchId}-set${index + 1}`,
+      matchId,
+      setNumber: index + 1,
+      team1Score: parseInt(score.t1, 10) || 0,
+      team2Score: parseInt(score.t2, 10) || 0,
+      isTiebreak: index === 2,
+    }));
 }
 
 function findSourceMatch(match: ScheduledMatch, side: 'team1' | 'team2', allMatches: ScheduledMatch[]): ScheduledMatch | undefined {

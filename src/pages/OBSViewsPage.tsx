@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Trophy, Radio } from 'lucide-react';
 import { useAppState, useTournamentData } from '../context';
 import { cn } from '../lib';
 import type { MatchSet, Pool, ScheduledMatch } from '../types';
+import { readLiveScoreDraft, type LiveScoreDraft } from '../liveScoreDraft';
 
 export function OBSMainDrawPage() {
   const { selectedTournament } = useAppState();
@@ -61,10 +63,14 @@ export function OBSPoolsPage() {
 export function OBSScoresPage() {
   const { selectedTournament } = useAppState();
   const { matches } = useTournamentData();
-  const tournamentMatches = matches
+  const liveDraft = useLiveScoreDraft(selectedTournament?.id);
+  const baseMatches = matches
     .filter(match => match.tournamentId === selectedTournament?.id)
     .sort(sortMatchesForScoreboard);
-  const featuredMatch = tournamentMatches.find(match => match.status === 'ongoing') ??
+  const tournamentMatches = applyLiveScoreDraft(baseMatches, liveDraft);
+  const liveDraftMatch = liveDraft ? tournamentMatches.find(match => match.id === liveDraft.matchId) : undefined;
+  const featuredMatch = liveDraftMatch ??
+    tournamentMatches.find(match => match.status === 'ongoing') ??
     tournamentMatches.find(match => match.status === 'scheduled' && match.team1 && match.team2) ??
     tournamentMatches.find(match => match.status === 'completed') ??
     tournamentMatches[0];
@@ -148,6 +154,45 @@ function OBSNotice({ title, message }: { title: string; message: string }) {
       </div>
     </div>
   );
+}
+
+function useLiveScoreDraft(tournamentId?: string): LiveScoreDraft | null {
+  const [draft, setDraft] = useState<LiveScoreDraft | null>(() => {
+    const current = readLiveScoreDraft();
+    return current?.tournamentId === tournamentId ? current : null;
+  });
+
+  useEffect(() => {
+    const syncDraft = () => {
+      const current = readLiveScoreDraft();
+      setDraft(current?.tournamentId === tournamentId ? current : null);
+    };
+
+    syncDraft();
+    window.addEventListener('storage', syncDraft);
+    window.addEventListener('mpl-live-score-draft', syncDraft);
+    const interval = window.setInterval(syncDraft, 500);
+
+    return () => {
+      window.removeEventListener('storage', syncDraft);
+      window.removeEventListener('mpl-live-score-draft', syncDraft);
+      window.clearInterval(interval);
+    };
+  }, [tournamentId]);
+
+  return draft;
+}
+
+function applyLiveScoreDraft(matches: ScheduledMatch[], draft: LiveScoreDraft | null): ScheduledMatch[] {
+  if (!draft) return matches;
+  return matches.map(match => {
+    if (match.id !== draft.matchId) return match;
+    return {
+      ...match,
+      status: match.status === 'completed' ? match.status : 'ongoing',
+      sets: draft.sets,
+    };
+  });
 }
 
 function OBSFIPBracket({ rounds, matches }: { rounds: number[]; matches: ScheduledMatch[] }) {
